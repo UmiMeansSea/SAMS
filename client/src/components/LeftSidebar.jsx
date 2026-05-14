@@ -6,84 +6,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import axios from 'axios';
-import UserProfileCard from './UserProfileCard';
-
-const API_URL = 'http://localhost:5005/api';
-
-// ─── New Project Modal ────────────────────────────────────────────────────────
-function NewProjectModal({ isOpen, onClose, onSubmit }) {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  if (!isOpen) return null;
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    setIsSubmitting(true);
-    try {
-      await onSubmit(name.trim(), description.trim());
-      setName('');
-      setDescription('');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleClose = () => { setName(''); setDescription(''); onClose(); };
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-slate-800 border border-slate-700 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
-        <div className="p-5 border-b border-slate-700 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-accent-500/20 rounded-lg">
-              <FolderPlus className="text-accent-400" size={18} />
-            </div>
-            <h2 className="text-base font-bold text-white">Create New Project</h2>
-          </div>
-          <button onClick={handleClose} className="text-slate-400 hover:text-white p-1 hover:bg-slate-700 rounded-lg transition-colors">
-            <X size={18} />
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Project Name <span className="text-red-400">*</span>
-            </label>
-            <input
-              autoFocus required type="text"
-              placeholder="e.g. Engineering Team Q3"
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-4 text-sm text-slate-200 focus:outline-none focus:border-accent-500 transition-all placeholder:text-slate-600"
-              value={name} onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Description <span className="text-slate-600">(optional)</span>
-            </label>
-            <textarea
-              rows={3} placeholder="What is this project for?"
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-4 text-sm text-slate-200 focus:outline-none focus:border-accent-500 transition-all placeholder:text-slate-600 resize-none"
-              value={description} onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={handleClose}
-              className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-all border border-slate-700">
-              Cancel
-            </button>
-            <button type="submit" disabled={isSubmitting || !name.trim()}
-              className="flex-[2] bg-accent-500 hover:bg-accent-400 disabled:bg-slate-600 disabled:cursor-not-allowed text-white py-2.5 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2">
-              {isSubmitting ? <><Loader2 className="animate-spin" size={16} /> Creating...</> : <><CheckCircle2 size={16} /> Create Project</>}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
+import ProjectModal from './ProjectModal';
 
 // ─── Main Sidebar ─────────────────────────────────────────────────────────────
 const LeftSidebar = ({
@@ -99,20 +22,24 @@ const LeftSidebar = ({
     'Manager': true,
     'Engineering': true,
     'Senior Developer': true,
-    'Product & Design': false,
-    'Data & AI': false,
-    'Quality Assurance': false,
-    'Intern': false,
-    'Operations & HR': false,
-    'Other': false,
+    'Product & Design': true,
+    'Data & AI': true,
+    'Quality Assurance': true,
+    'Intern': true,
+    'Operations & HR': true,
+    'Other': true,
   });
   const [searchQuery, setSearchQuery] = useState('');
-  const [isImporting, setIsImporting] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
-  const [saveStatus, setSaveStatus] = useState('idle');
+  const [profileCard, setProfileCard] = useState(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'saving' | 'saved'
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  const [isMobile, setIsMobile] = useState(false);
+
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     const check = () => {
@@ -124,11 +51,6 @@ const LeftSidebar = ({
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
-
-  // UserProfileCard state
-  const [profileCard, setProfileCard] = useState(null); // { mode, person }
-
-  const fileInputRef = useRef(null);
 
   const categories = [
     'Leadership',
@@ -163,6 +85,18 @@ const LeftSidebar = ({
     } catch (err) {
       console.error('Failed to create project:', err);
       alert('Failed to create project. Check the console for details.');
+    }
+  };
+
+  const handleUpdateProject = async (name, description) => {
+    try {
+      const res = await axios.patch(`${API_URL}/projects/${currentProject._id}`, { name, description });
+      onSwitchProject(res.data); // Update current local project data
+      setIsEditProjectModalOpen(false);
+      refreshData(); // Refresh UI to show new name everywhere
+    } catch (err) {
+      console.error('Failed to update project:', err);
+      alert('Failed to update project.');
     }
   };
 
@@ -325,7 +259,14 @@ const LeftSidebar = ({
             onClick={() => setIsProjectDropdownOpen(v => !v)}
             className="w-full flex items-center justify-between bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2.5 rounded-xl text-left transition-all"
           >
-            <span className="text-sm font-semibold text-white truncate">
+            <span 
+              className="text-sm font-semibold text-white truncate cursor-pointer hover:text-accent-300 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsEditProjectModalOpen(true);
+              }}
+              title="Click to edit project details"
+            >
               {currentProject?.name || 'Select Project'}
             </span>
             <ChevronDown size={15} className={`text-slate-400 flex-shrink-0 transition-transform ${isProjectDropdownOpen ? 'rotate-180' : ''}`} />
@@ -439,10 +380,19 @@ const LeftSidebar = ({
       </div>
 
       {/* ── Modals ── */}
-      <NewProjectModal
+      <ProjectModal
         isOpen={isNewProjectModalOpen}
         onClose={() => setIsNewProjectModalOpen(false)}
         onSubmit={handleCreateProject}
+        mode="create"
+      />
+
+      <ProjectModal
+        isOpen={isEditProjectModalOpen}
+        onClose={() => setIsEditProjectModalOpen(false)}
+        onSubmit={handleUpdateProject}
+        mode="edit"
+        initialData={currentProject}
       />
 
       {profileCard && (

@@ -13,6 +13,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import PersonNode from './components/PersonNode';
+import ProjectModal from './components/ProjectModal';
 import DeletableEdge from './components/DeletableEdge';
 import LeftSidebar from './components/LeftSidebar';
 import RightSidebar from './components/RightSidebar';
@@ -39,12 +40,26 @@ function Flow() {
   const [projects, setProjects] = useState([]);
   const [currentProject, setCurrentProject] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
 
   // Switching project clears canvas instantly before re-fetching
   const handleSwitchProject = (proj) => {
     setNodes([]);
     setEdges([]);
     setCurrentProject(proj);
+  };
+
+  const handleUpdateProject = async (name, description) => {
+    try {
+      const res = await axios.patch(`${API_URL}/projects/${currentProject._id}`, { name, description });
+      setCurrentProject(res.data);
+      setProjects(prev => prev.map(p => p._id === res.data._id ? res.data : p));
+      setIsEditProjectModalOpen(false);
+      fetchData(); // Sync everything
+    } catch (err) {
+      console.error('Failed to update project:', err);
+      alert('Failed to update project.');
+    }
   };
 
   const fetchData = useCallback(async () => {
@@ -506,9 +521,13 @@ function Flow() {
           </ReactFlow>
           {/* Responsive Title and Controls overlay */}
           <div className="absolute top-4 left-1/2 -translate-x-1/2 sm:left-4 sm:translate-x-0 z-10 flex items-center gap-2 sm:gap-4 pointer-events-none">
-            <div className="pointer-events-auto bg-slate-800/80 backdrop-blur-md border border-slate-700 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 shadow-2xl max-w-[40vw] sm:max-w-none">
+            <div 
+              className="pointer-events-auto bg-slate-800/80 backdrop-blur-md border border-slate-700 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 shadow-2xl max-w-[40vw] sm:max-w-none cursor-pointer hover:bg-slate-700 transition-all group"
+              onClick={() => setIsEditProjectModalOpen(true)}
+              title="Click to edit project details"
+            >
               <div className="w-2 h-2 rounded-full bg-accent-500 animate-pulse flex-shrink-0" />
-              <h1 className="text-xs sm:text-sm font-bold text-white tracking-wide uppercase truncate">
+              <h1 className="text-xs sm:text-sm font-bold text-white tracking-wide uppercase truncate group-hover:text-accent-300">
                 {currentProject?.name || 'OrgMap'}
               </h1>
             </div>
@@ -531,6 +550,13 @@ function Flow() {
           (!p.projectId && (p.project === 'OrgMap' || (p.position && (p.position.x !== 0 || p.position.y !== 0))))
         )} 
         currentProject={currentProject}
+      />
+      <ProjectModal
+        isOpen={isEditProjectModalOpen}
+        onClose={() => setIsEditProjectModalOpen(false)}
+        onSubmit={handleUpdateProject}
+        mode="edit"
+        initialData={currentProject}
       />
     </div>
   );

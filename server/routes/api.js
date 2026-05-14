@@ -147,6 +147,21 @@ router.post('/projects', async (req, res) => {
   }
 });
 
+// Update project details
+router.patch('/projects/:id', async (req, res) => {
+  try {
+    const project = await Project.findByIdAndUpdate(
+      req.params.id,
+      { $set: req.body },
+      { new: true }
+    );
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    res.json(project);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
 // Save/Update project (manually trigger lastSaved update)
 router.put('/projects/:id/save', async (req, res) => {
   try {

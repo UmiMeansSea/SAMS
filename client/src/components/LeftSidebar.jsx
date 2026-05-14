@@ -1,53 +1,223 @@
-import { useState, useRef } from 'react';
-import { Search, ChevronDown, ChevronRight, UserPlus, UploadCloud, FolderDot, GripVertical, Loader2 } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import {
+  UserPlus, Search, Trash2, ChevronDown, FolderPlus,
+  Save, LayoutGrid, UploadCloud, GripVertical, Loader2,
+  ChevronRight, X, CheckCircle2, PanelLeftClose, PanelLeftOpen
+} from 'lucide-react';
 import * as XLSX from 'xlsx';
 import axios from 'axios';
-import AddPersonModal from './AddPersonModal';
+import UserProfileCard from './UserProfileCard';
 
-export default function LeftSidebar({ people, refreshData }) {
+const API_URL = 'http://localhost:5005/api';
+
+// ─── New Project Modal ────────────────────────────────────────────────────────
+function NewProjectModal({ isOpen, onClose, onSubmit }) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setIsSubmitting(true);
+    try {
+      await onSubmit(name.trim(), description.trim());
+      setName('');
+      setDescription('');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClose = () => { setName(''); setDescription(''); onClose(); };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-slate-800 border border-slate-700 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+        <div className="p-5 border-b border-slate-700 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-accent-500/20 rounded-lg">
+              <FolderPlus className="text-accent-400" size={18} />
+            </div>
+            <h2 className="text-base font-bold text-white">Create New Project</h2>
+          </div>
+          <button onClick={handleClose} className="text-slate-400 hover:text-white p-1 hover:bg-slate-700 rounded-lg transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              Project Name <span className="text-red-400">*</span>
+            </label>
+            <input
+              autoFocus required type="text"
+              placeholder="e.g. Engineering Team Q3"
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-4 text-sm text-slate-200 focus:outline-none focus:border-accent-500 transition-all placeholder:text-slate-600"
+              value={name} onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              Description <span className="text-slate-600">(optional)</span>
+            </label>
+            <textarea
+              rows={3} placeholder="What is this project for?"
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-4 text-sm text-slate-200 focus:outline-none focus:border-accent-500 transition-all placeholder:text-slate-600 resize-none"
+              value={description} onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={handleClose}
+              className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-all border border-slate-700">
+              Cancel
+            </button>
+            <button type="submit" disabled={isSubmitting || !name.trim()}
+              className="flex-[2] bg-accent-500 hover:bg-accent-400 disabled:bg-slate-600 disabled:cursor-not-allowed text-white py-2.5 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2">
+              {isSubmitting ? <><Loader2 className="animate-spin" size={16} /> Creating...</> : <><CheckCircle2 size={16} /> Create Project</>}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Sidebar ─────────────────────────────────────────────────────────────
+const LeftSidebar = ({
+  people,
+  refreshData,
+  projects = [],
+  currentProject,
+  onSwitchProject,
+  onSaveProject
+}) => {
   const [expandedCategories, setExpandedCategories] = useState({
-    Manager: true,
+    'Leadership': true,
+    'Manager': true,
+    'Engineering': true,
     'Senior Developer': true,
-    Intern: false,
-    Other: false,
+    'Product & Design': false,
+    'Data & AI': false,
+    'Quality Assurance': false,
+    'Intern': false,
+    'Operations & HR': false,
+    'Other': false,
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [isImporting, setIsImporting] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('idle');
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+
+  useEffect(() => {
+    const check = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile) setIsCollapsed(true);
+    };
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  // UserProfileCard state
+  const [profileCard, setProfileCard] = useState(null); // { mode, person }
+
   const fileInputRef = useRef(null);
+
+  const categories = [
+    'Leadership',
+    'Manager',
+    'Engineering',
+    'Senior Developer',
+    'Product & Design',
+    'Data & AI',
+    'Quality Assurance',
+    'Intern',
+    'Operations & HR',
+    'Other'
+  ];
+  const filteredPeople = people.filter(p =>
+    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.role.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleSave = async () => {
+    setSaveStatus('saving');
+    await onSaveProject?.();
+    setSaveStatus('saved');
+    setTimeout(() => setSaveStatus('idle'), 2000);
+  };
+
+  const handleCreateProject = async (name, description) => {
+    try {
+      if (currentProject) await axios.put(`${API_URL}/projects/${currentProject._id}/save`);
+      const res = await axios.post(`${API_URL}/projects`, { name, description });
+      onSwitchProject(res.data);
+      setIsNewProjectModalOpen(false);
+    } catch (err) {
+      console.error('Failed to create project:', err);
+      alert('Failed to create project. Check the console for details.');
+    }
+  };
+
+  const handleSwitchProject = async (proj) => {
+    if (currentProject && currentProject._id !== proj._id) {
+      try { await axios.put(`${API_URL}/projects/${currentProject._id}/save`); } catch (_) {}
+    }
+    onSwitchProject(proj);
+    setIsProjectDropdownOpen(false);
+  };
+
+  const toggleCategory = (cat) =>
+    setExpandedCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
+
+  const onDragStart = (event, nodeType, personData) => {
+    event.dataTransfer.setData('application/reactflow', nodeType);
+    event.dataTransfer.setData('personData', JSON.stringify(personData));
+    event.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDeleteFromProject = async (e, personId, personName) => {
+    e.stopPropagation();
+    if (!window.confirm(`Remove ${personName} from this project? They stay in the database.`)) return;
+    try {
+      await axios.patch(`${API_URL}/people/${personId}`, {
+        projectId: null, project: '', managers: [], position: { x: 0, y: 0 }
+      });
+      refreshData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleImportExcel = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     setIsImporting(true);
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
-        const bstr = evt.target.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
+        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
         const data = XLSX.utils.sheet_to_json(ws);
-
-        // Expected columns: name, role, category, project, bio
-        // Map them to the Person model format
-        const formattedData = data.map((item, index) => ({
-          name: item.name || 'Unknown',
-          role: item.role || 'Employee',
-          email: item.email || '',
-          category: item.category || 'Other',
-          project: item.project || 'General',
-          bio: item.bio || '',
-          position: { x: index * 100, y: 300 } // Default spread position
+        const formatted = data.map((item, i) => ({
+          name: item.name || 'Unknown', role: item.role || 'Employee',
+          email: item.email || '', category: item.category || 'Other',
+          bio: item.bio || '', projectId: currentProject?._id || null,
+          position: { x: i * 120, y: 300 }
         }));
-
-        await axios.post('http://localhost:5005/api/people/batch', formattedData);
-        alert(`Successfully imported ${formattedData.length} people!`);
+        await axios.post(`${API_URL}/people/batch`, formatted);
+        alert(`Imported ${formatted.length} people!`);
         refreshData();
       } catch (err) {
-        console.error('Import failed:', err);
-        alert('Failed to import Excel file. Ensure columns match: name, role, category, project, bio');
+        console.error(err);
+        alert('Import failed.');
       } finally {
         setIsImporting(false);
       }
@@ -55,75 +225,172 @@ export default function LeftSidebar({ people, refreshData }) {
     reader.readAsBinaryString(file);
   };
 
-  const toggleCategory = (cat) => {
-    setExpandedCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
-  };
-
-  const categories = ['Manager', 'Senior Developer', 'Intern', 'Other'];
-
-  const filteredPeople = people.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.role.toLowerCase().includes(searchQuery.toLowerCase()));
-
-  // Drag start for adding a new person to the canvas from the sidebar
-  const onDragStart = (event, nodeType, personData) => {
-    event.dataTransfer.setData('application/reactflow', nodeType);
-    event.dataTransfer.setData('personData', JSON.stringify(personData));
-    event.dataTransfer.effectAllowed = 'move';
-  };
+  // Sort: active project first
+  const sortedProjects = [
+    ...(currentProject ? [currentProject] : []),
+    ...projects.filter(p => p._id !== currentProject?._id).sort((a, b) => a.name.localeCompare(b.name))
+  ];
 
   return (
-    <div className="w-80 h-full bg-slate-800/90 backdrop-blur-md border-r border-slate-700 flex flex-col z-20 overflow-hidden shadow-2xl relative">
-      <div className="p-4 border-b border-slate-700">
-        <h2 className="text-xl font-bold text-white mb-4">Toolbox</h2>
-        
-        {/* Search */}
+    <>
+      {/* Mobile backdrop */}
+      {isMobile && !isCollapsed && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[55]"
+          onClick={() => setIsCollapsed(true)}
+        />
+      )}
+
+      {/* Mobile floating open button */}
+      {isMobile && isCollapsed && (
+        <button
+          onClick={() => setIsCollapsed(false)}
+          className="fixed top-4 left-2 z-50 p-2.5 bg-slate-800/90 backdrop-blur-md border border-slate-700 rounded-xl text-accent-400 shadow-xl active:scale-95 transition-transform"
+          title="Open Projects"
+        >
+          <LayoutGrid size={18} />
+        </button>
+      )}
+
+      <div
+        className={[
+          'bg-slate-900 border-r border-slate-800 flex flex-col shadow-2xl transition-all duration-300 group overflow-hidden',
+          isMobile
+            ? `fixed top-0 left-0 h-full z-[60] ${isCollapsed ? 'w-0' : 'w-[85vw] max-w-xs'}`
+            : `relative h-full z-20 ${isCollapsed ? 'w-14' : 'w-80'}`,
+        ].join(' ')}
+      >
+        {/* Desktop rail (collapsed) */}
+        {!isMobile && isCollapsed && (
+          <div className="flex flex-col items-center py-4 gap-4 h-full">
+            <button
+              onClick={() => setIsCollapsed(false)}
+              className="p-3 bg-accent-500/10 text-accent-400 hover:bg-accent-500/20 rounded-xl transition-all mb-4 shadow-lg shadow-accent-500/10"
+              title="Expand Sidebar"
+            >
+              <LayoutGrid size={20} />
+            </button>
+            <div className="flex-1 flex flex-col items-center gap-4">
+              <button onClick={() => setProfileCard({ mode: 'create', person: null })} className="p-2 text-slate-500 hover:text-white" title="Add Person"><UserPlus size={20} /></button>
+              <button onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-500 hover:text-white" title="Import Excel"><UploadCloud size={20} /></button>
+            </div>
+          </div>
+        )}
+
+        <div className={`flex flex-col h-full ${isMobile ? 'w-full' : 'w-80'} transition-all duration-300 ${(!isMobile && isCollapsed) ? 'opacity-0 pointer-events-none -translate-x-5' : 'opacity-100 translate-x-0'}`}>
+
+      {/* ── Project Selector ── */}
+      <div className="p-4 border-b border-slate-800 space-y-3">
+        <div className="flex items-center justify-between">
+          <button 
+            onClick={() => setIsCollapsed(true)}
+            className="flex items-center gap-2 hover:bg-slate-800 p-1.5 -ml-1.5 rounded-lg transition-all"
+            title="Collapse Sidebar"
+          >
+            <LayoutGrid size={16} className="text-accent-400" />
+            <span className="font-bold tracking-widest text-white uppercase text-xs">Projects</span>
+          </button>
+          <div className="flex gap-1">
+            <button onClick={handleSave} className="p-1.5 hover:bg-slate-800 rounded-lg transition-all" title="Save">
+              {saveStatus === 'saved' ? <CheckCircle2 size={17} className="text-green-400" />
+                : saveStatus === 'saving' ? <Loader2 size={17} className="text-slate-400 animate-spin" />
+                : <Save size={17} className="text-slate-400 hover:text-white" />}
+            </button>
+            <button onClick={() => setIsNewProjectModalOpen(true)} className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-all" title="New Project">
+              <FolderPlus size={17} />
+            </button>
+          </div>
+        </div>
+
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <button
+            onClick={() => setIsProjectDropdownOpen(v => !v)}
+            className="w-full flex items-center justify-between bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2.5 rounded-xl text-left transition-all"
+          >
+            <span className="text-sm font-semibold text-white truncate">
+              {currentProject?.name || 'Select Project'}
+            </span>
+            <ChevronDown size={15} className={`text-slate-400 flex-shrink-0 transition-transform ${isProjectDropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {isProjectDropdownOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setIsProjectDropdownOpen(false)} />
+              <div className="absolute top-full left-0 right-0 mt-1.5 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+                {sortedProjects.length === 0
+                  ? <p className="px-4 py-3 text-xs text-slate-500 italic text-center">No projects yet.</p>
+                  : sortedProjects.map((proj, idx) => {
+                    const isActive = currentProject?._id === proj._id;
+                    return (
+                      <button key={proj._id} onClick={() => handleSwitchProject(proj)}
+                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${idx > 0 ? 'border-t border-slate-700/50' : ''} ${isActive ? 'bg-accent-500/15 text-accent-300 font-semibold' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isActive ? 'bg-accent-400' : 'bg-slate-600'}`} />
+                        <span className="truncate flex-1">{proj.name}</span>
+                        {isActive && <span className="ml-auto text-xs bg-accent-500/20 text-accent-400 px-2 py-0.5 rounded-full font-normal">Active</span>}
+                      </button>
+                    );
+                  })}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── Search ── */}
+      <div className="px-4 pt-4 pb-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={15} />
           <input
-            type="text"
-            placeholder="Search people..."
-            className="w-full bg-slate-900 border border-slate-700 rounded-md py-2 pl-9 pr-3 text-sm text-slate-200 focus:outline-none focus:border-accent-500"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            type="text" placeholder="Search people..."
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 pl-9 pr-3 text-sm text-slate-200 focus:outline-none focus:border-accent-500 transition-colors placeholder:text-slate-600"
+            value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
       </div>
 
-      {/* People Categories */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* ── People List ── */}
+      <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
         {categories.map(category => {
-          const categoryPeople = filteredPeople.filter(p => p.category === category);
-          if (categoryPeople.length === 0 && searchQuery) return null;
-
+          const catPeople = filteredPeople.filter(p => p.category === category);
+          if (catPeople.length === 0 && searchQuery) return null;
           return (
-            <div key={category} className="space-y-1">
-              <button
-                onClick={() => toggleCategory(category)}
-                className="w-full flex items-center justify-between p-2 rounded hover:bg-slate-700/50 text-slate-300 transition-colors"
-              >
-                <span className="font-semibold text-sm">{category}s ({categoryPeople.length})</span>
-                {expandedCategories[category] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            <div key={category}>
+              <button onClick={() => toggleCategory(category)}
+                className="w-full flex items-center justify-between py-1.5 text-slate-400 hover:text-slate-200 transition-colors">
+                <span className="text-xs font-bold uppercase tracking-wider">{category}s ({catPeople.length})</span>
+                {expandedCategories[category] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </button>
-              
+
               {expandedCategories[category] && (
-                <div className="pl-2 space-y-2 mt-2">
-                  {categoryPeople.map(person => (
-                    <div 
+                <div className="space-y-1.5 mt-1">
+                  {catPeople.map(person => (
+                    <div
                       key={person._id || person.id}
                       draggable
                       onDragStart={(e) => onDragStart(e, 'person', person)}
-                      className="group flex items-center gap-3 p-2 bg-slate-900/50 border border-slate-700 rounded-lg cursor-grab active:cursor-grabbing hover:border-accent-500 transition-colors"
+                      onClick={() => setProfileCard({ mode: 'view', person })}
+                      className="group flex items-center gap-2.5 p-2 bg-slate-800/50 border border-slate-700/50 rounded-lg cursor-pointer hover:border-accent-500/50 hover:bg-slate-800 transition-all"
                     >
-                      <GripVertical size={14} className="text-slate-500 group-hover:text-slate-300" />
-                      <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center overflow-hidden flex-shrink-0">
-                        {person.pfpUrl ? <img src={person.pfpUrl} alt={person.name} /> : <span className="text-xs font-bold">{person.name.charAt(0)}</span>}
+                      <GripVertical size={13} className="text-slate-600 group-hover:text-slate-400 flex-shrink-0 cursor-grab" />
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-accent-600 to-indigo-600 flex items-center justify-center overflow-hidden flex-shrink-0 text-xs font-bold text-white">
+                        {person.pfpUrl
+                          ? <img src={person.pfpUrl} alt={person.name} className="w-full h-full object-cover" />
+                          : person.name.charAt(0).toUpperCase()}
                       </div>
-                      <div className="overflow-hidden">
-                        <p className="text-sm text-slate-200 font-medium truncate">{person.name}</p>
-                        <p className="text-xs text-slate-400 truncate">{person.role}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-200 font-medium truncate leading-tight">{person.name}</p>
+                        <p className="text-xs text-slate-500 truncate">{person.role}</p>
                       </div>
+                      <button
+                        onClick={(e) => handleDeleteFromProject(e, person._id || person.id, person.name)}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all flex-shrink-0"
+                        title="Remove from Project"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   ))}
-                  {categoryPeople.length === 0 && <p className="text-xs text-slate-500 pl-6 italic">No one found.</p>}
+                  {catPeople.length === 0 && <p className="text-xs text-slate-600 italic pl-2 py-1">No one here.</p>}
                 </div>
               )}
             </div>
@@ -131,42 +398,45 @@ export default function LeftSidebar({ people, refreshData }) {
         })}
       </div>
 
-      {/* Action Zone (Bottom) */}
-      <div className="p-4 border-t border-slate-700 bg-slate-800 space-y-3">
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="w-full flex items-center justify-center gap-2 bg-accent-500 hover:bg-accent-400 text-white py-2 rounded-md text-sm font-semibold transition-colors shadow-lg shadow-accent-500/10"
+      {/* ── Bottom Actions ── */}
+      <div className="p-4 border-t border-slate-800 bg-slate-900 space-y-2.5">
+        <button
+          onClick={() => setProfileCard({ mode: 'create', person: null })}
+          className="w-full flex items-center justify-center gap-2 bg-accent-600 hover:bg-accent-500 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-accent-900/20"
         >
-          <UserPlus size={16} /> Add Person
+          <UserPlus size={15} /> Add Person
         </button>
-        
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          className="hidden" 
-          accept=".xlsx, .xls, .csv" 
-          onChange={handleImportExcel} 
-        />
-        
-        <button 
+        <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.xls,.csv" onChange={handleImportExcel} />
+        <button
           onClick={() => fileInputRef.current?.click()}
           disabled={isImporting}
-          className="w-full flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 py-2 rounded-md text-sm transition-colors border border-slate-600 disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl text-sm transition-colors border border-slate-700 disabled:opacity-50"
         >
-          {isImporting ? <Loader2 className="animate-spin" size={16} /> : <UploadCloud size={16} />}
+          {isImporting ? <Loader2 className="animate-spin" size={15} /> : <UploadCloud size={15} />}
           {isImporting ? 'Importing...' : 'Import Excel'}
-        </button>
-        
-        <button className="w-full flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 py-2 rounded-md text-sm transition-colors border border-slate-600">
-          <FolderDot size={16} /> Switch Project
         </button>
       </div>
 
-      <AddPersonModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        onRefresh={refreshData} 
+      {/* ── Modals ── */}
+      <NewProjectModal
+        isOpen={isNewProjectModalOpen}
+        onClose={() => setIsNewProjectModalOpen(false)}
+        onSubmit={handleCreateProject}
       />
-    </div>
+
+      {profileCard && (
+        <UserProfileCard
+          mode={profileCard.mode}
+          person={profileCard.person}
+          projectId={currentProject?._id}
+          onClose={() => setProfileCard(null)}
+          onRefresh={() => { refreshData(); setProfileCard(null); }}
+        />
+      )}
+        </div>
+      </div>
+    </>
   );
-}
+};
+
+export default LeftSidebar;

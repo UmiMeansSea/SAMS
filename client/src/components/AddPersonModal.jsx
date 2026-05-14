@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { X, UserPlus, Mail, Briefcase, FileText, FolderRoot } from 'lucide-react';
 import axios from 'axios';
 
-export default function AddPersonModal({ isOpen, onClose, onRefresh }) {
+export default function AddPersonModal({ isOpen, onClose, onRefresh, projectId }) {
   const [formData, setFormData] = useState({
     name: '',
     role: '',
     email: '',
-    project: '',
+    project: 'OrgMap',
     bio: '',
     category: 'Other'
   });
@@ -26,11 +26,12 @@ export default function AddPersonModal({ isOpen, onClose, onRefresh }) {
     try {
       await axios.post('http://localhost:5005/api/people', {
         ...formData,
+        projectId,
         position: { x: 0, y: 0 }
       });
       onRefresh();
       onClose();
-      setFormData({ name: '', role: '', email: '', project: '', bio: '', category: 'Other' });
+      setFormData({ name: '', role: '', email: '', project: 'OrgMap', bio: '', category: 'Other' });
     } catch (err) {
       console.error('Error adding person:', err);
       alert('Failed to add person.');
@@ -121,20 +122,7 @@ export default function AddPersonModal({ isOpen, onClose, onRefresh }) {
               </div>
             </div>
 
-            {/* Projects */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider ml-1">Current Projects</label>
-              <div className="relative">
-                <FolderRoot className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" size={14} />
-                <input
-                  type="text"
-                  placeholder="Project Alpha, Beta..."
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-200 focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500/20 transition-all placeholder:text-slate-600"
-                  value={formData.project}
-                  onChange={(e) => setFormData({ ...formData, project: e.target.value })}
-                />
-              </div>
-            </div>
+
 
             {/* Bio */}
             <div className="space-y-1.5">

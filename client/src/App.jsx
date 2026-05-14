@@ -9,6 +9,7 @@ import {
   addEdge,
   ReactFlowProvider,
   useReactFlow,
+  useStore,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import PersonNode from './components/PersonNode';
@@ -35,33 +36,58 @@ function Flow() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [rawPeople, setRawPeople] = useState([]); // Store raw data for Sidebars
+  const [projects, setProjects] = useState([]);
+  const [currentProject, setCurrentProject] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Switching project clears canvas instantly before re-fetching
+  const handleSwitchProject = (proj) => {
+    setNodes([]);
+    setEdges([]);
+    setCurrentProject(proj);
+  };
 
   const fetchData = useCallback(async () => {
     try {
       const res = await axios.get(`${API_URL}/people`);
-      const people = res.data;
-      
-      setRawPeople(people);
+      const allPeople = res.data;
+      setRawPeople(allPeople);
 
-      const fetchedNodes = people.map(p => ({
+      // Filter for canvas: show people in the current project,
+      // OR people with no projectId at all (legacy/unassigned)
+      const activeProjectId = currentProject?._id;
+      
+      const projectPeople = activeProjectId
+        ? allPeople.filter(p =>
+            p.projectId === activeProjectId ||
+            p.projectId === String(activeProjectId) ||
+            (!p.projectId && (p.project === 'OrgMap' || (p.position && (p.position.x !== 0 || p.position.y !== 0))))
+          )
+        : allPeople; // No project selected → show everyone
+
+      const fetchedNodes = projectPeople.map(p => ({
         id: p._id,
         type: 'person',
-        position: p.position || { x: 0, y: 0 },
+        position: p.position || { x: Math.random() * 600, y: Math.random() * 400 },
         data: { id: p._id, name: p.name, role: p.role, project: p.project, pfpUrl: p.pfpUrl, bio: p.bio },
       }));
 
       const fetchedEdges = [];
-      people.forEach(p => {
+      const projectPeopleIds = new Set(projectPeople.map(p => p._id));
+
+      projectPeople.forEach(p => {
         if (p.managers && p.managers.length > 0) {
           p.managers.forEach(managerId => {
-            fetchedEdges.push({
-              id: `e${managerId}-${p._id}`,
-              source: managerId,
-              target: p._id,
-              type: 'deletable',
-              style: { stroke: '#1B98E0', strokeWidth: 3 },
-              animated: true,
-            });
+            if (projectPeopleIds.has(managerId)) {
+              fetchedEdges.push({
+                id: `e${managerId}-${p._id}`,
+                source: managerId,
+                target: p._id,
+                type: 'deletable',
+                style: { stroke: '#1B98E0', strokeWidth: 3 },
+                animated: true,
+              });
+            }
           });
         }
       });
@@ -71,14 +97,55 @@ function Flow() {
     } catch (err) {
       console.error('Error fetching people:', err);
     }
-  }, [setNodes, setEdges]);
+  }, [currentProject, setNodes, setEdges]);
 
-  // Fetch data from backend on mount
+  // Handle Save
+  const handleSave = async () => {
+    if (!currentProject) return;
+    setIsSaving(true);
+    try {
+      await axios.put(`${API_URL}/projects/${currentProject._id}/save`);
+      // Update local projects list to refresh timestamps
+      const projRes = await axios.get(`${API_URL}/projects`);
+      setProjects(projRes.data);
+      alert('Project saved successfully!');
+    } catch (err) {
+      console.error('Save failed:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Initialize projects (best-effort) and then fetch people
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/projects`);
+        let activeProject = null;
+        if (res.data.length === 0) {
+          const first = await axios.post(`${API_URL}/projects`, { name: 'Default Project' });
+          activeProject = first.data;
+          setProjects([activeProject]);
+        } else {
+          setProjects(res.data);
+          activeProject = res.data[0];
+        }
+        setCurrentProject(activeProject);
+      } catch (err) {
+        // Projects API not available yet — still show people without project filter
+        console.warn('Projects API unavailable, showing all people:', err.message);
+        fetchData(); // Fetch people anyway
+      }
+    };
+    init();
+  }, []); // eslint-disable-line
+
+  // Re-fetch people whenever currentProject changes
   useEffect(() => {
     fetchData();
     window.addEventListener('refreshData', fetchData);
     return () => window.removeEventListener('refreshData', fetchData);
-  }, [fetchData]);
+  }, [currentProject]); // eslint-disable-line
 
   // Connect manually (e.g. dragging edge from handle to handle)
   const onConnect = useCallback(
@@ -99,6 +166,23 @@ function Flow() {
   const [magnetTarget, setMagnetTarget] = useState(null);
   const [hoveredEdgeId, setHoveredEdgeId] = useState(null);
 
+  const onEdgeClick = useCallback(async (event, edge) => {
+    if (edge.type !== 'deletable') return;
+    
+    // Check if it's the "hovered" one to match the red highlight visual feedback
+    if (edge.id !== hoveredEdgeId) return;
+
+    try {
+      setEdges((eds) => eds.filter((e) => e.id !== edge.id));
+      await axios.patch(`${API_URL}/people/${edge.target}`, {
+        $pull: { managers: edge.source }
+      });
+      fetchData(); // Sync sidebars
+    } catch (err) {
+      console.error('Error deleting edge:', err);
+    }
+  }, [setEdges, fetchData, hoveredEdgeId]);
+
   // Math for predictive hover (Point-to-Line-Segment distance)
   const getDistanceToEdge = (px, py, x1, y1, x2, y2) => {
     const dx = x2 - x1;
@@ -115,7 +199,7 @@ function Flow() {
     const { x, y } = screenToFlowPosition({ x: event.clientX, y: event.clientY });
     
     let closestId = null;
-    let minDistance = 15; // Threshold in flow units (approx 7-15px depending on zoom)
+    let minDistance = 40; // Threshold in flow units (approx 20-40px depending on zoom)
 
     // Optimization: create a lookup map for nodes
     const nodeMap = new Map(nodes.map(n => [n.id, n.position]));
@@ -365,6 +449,7 @@ function Flow() {
 
       try {
         await axios.patch(`${API_URL}/people/${personData._id || personData.id}`, {
+          projectId: currentProject?._id,
           position: { x: position.x - 40, y: position.y - 40 } // Center the node slightly
         });
         fetchData();
@@ -377,15 +462,23 @@ function Flow() {
 
   return (
     <div className="w-screen h-screen flex bg-navy-900 overflow-hidden font-sans">
-      <LeftSidebar people={rawPeople} refreshData={fetchData} />
+      <LeftSidebar 
+        people={rawPeople} 
+        refreshData={fetchData} 
+        projects={projects}
+        currentProject={currentProject}
+        onSwitchProject={handleSwitchProject}
+        onSaveProject={handleSave}
+      />
       <HoverContext.Provider value={hoveredEdgeId}>
-        <div className="flex-1 h-full relative" onPointerMove={onPointerMove}>
+        <div className="flex-1 h-full w-0 min-w-0 relative" onPointerMove={onPointerMove}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onEdgeClick={onEdgeClick}
             onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
             onDragOver={onDragOver}
@@ -403,17 +496,20 @@ function Flow() {
             <Background color="#1c2b3c" gap={24} size={2} />
             <Controls className="!bg-slate-800 !border-slate-700 !text-slate-300" />
           </ReactFlow>
-          {/* Title and Controls overlay */}
-          <div className="absolute top-4 left-4 z-10 flex items-center gap-4">
-            <h1 className="text-xl font-bold text-white px-4 py-2 drop-shadow-xl font-sans tracking-wide">
-              OrgMap Workspace
-            </h1>
+          {/* Responsive Title and Controls overlay */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 sm:left-4 sm:translate-x-0 z-10 flex items-center gap-2 sm:gap-4 pointer-events-none">
+            <div className="pointer-events-auto bg-slate-800/80 backdrop-blur-md border border-slate-700 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 shadow-2xl max-w-[40vw] sm:max-w-none">
+              <div className="w-2 h-2 rounded-full bg-accent-500 animate-pulse flex-shrink-0" />
+              <h1 className="text-xs sm:text-sm font-bold text-white tracking-wide uppercase truncate">
+                {currentProject?.name || 'OrgMap'}
+              </h1>
+            </div>
             <button 
               onClick={autoAlign}
-              className="flex items-center gap-2 bg-accent-600 hover:bg-accent-500 text-white px-4 py-2 rounded-full shadow-lg transition-all text-sm font-semibold border border-accent-400/30"
+              className="pointer-events-auto flex items-center gap-1.5 bg-slate-800/80 backdrop-blur-md hover:bg-slate-700 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl shadow-lg transition-all text-xs sm:text-sm font-semibold border border-slate-700"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
-              Auto Align Tree
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
+              <span className="hidden xs:inline sm:inline">Auto Align</span>
             </button>
           </div>
         </div>

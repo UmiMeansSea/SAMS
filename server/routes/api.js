@@ -69,6 +69,22 @@ router.patch('/people/:id', async (req, res) => {
   }
 });
 
+// Full profile update (PUT)
+router.put('/people/:id', async (req, res) => {
+  try {
+    const person = await Person.findByIdAndUpdate(
+      req.params.id,
+      { $set: req.body },
+      { new: true }
+    );
+    if (!person) return res.status(404).json({ message: 'Person not found' });
+    res.json(person);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+
 // Delete a person
 router.delete('/people/:id', async (req, res) => {
   try {

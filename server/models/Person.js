@@ -5,9 +5,13 @@ const PersonSchema = new mongoose.Schema({
   role: { type: String, required: true },
   email: { type: String },
   bio: { type: String, default: '' },
+  projectsWorkingOn: [{ type: String }],
   project: { type: String, default: '' },
   pfpUrl: { type: String, default: '' },
-  category: { type: String, enum: ['Manager', 'Senior Developer', 'Intern', 'Other'], default: 'Other' },
+  category: { 
+    type: String, 
+    default: 'Other' 
+  },
   // Multi-project support
   projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },
   isOnCanvas: { type: Boolean, default: false },

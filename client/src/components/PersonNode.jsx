@@ -1,6 +1,6 @@
 import { Handle, Position } from '@xyflow/react';
 import { Edit2, Loader2 } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 
 export default function PersonNode({ data }) {
@@ -8,6 +8,11 @@ export default function PersonNode({ data }) {
   const [isUploading, setIsUploading] = useState(false);
   const [currentPfp, setCurrentPfp] = useState(data.pfpUrl);
   const fileInputRef = useRef(null);
+
+  // Sync with incoming data from props (e.g. when updated via sidebar)
+  useEffect(() => {
+    setCurrentPfp(data.pfpUrl);
+  }, [data.pfpUrl]);
 
   const handleUpload = async (e) => {
     const file = e.target.files[0];
@@ -86,14 +91,14 @@ export default function PersonNode({ data }) {
         <p className="text-xs text-slate-400">{data.role}</p>
       </div>
 
-      {/* Bio Tooltip (appears below or to the side depending on space, here we put it to the right) */}
+      {/* Bio Tooltip – shown above on mobile, to the right on desktop */}
       {isHovered && (
-        <div className="absolute left-full ml-4 top-0 w-48 bg-slate-800/90 backdrop-blur-md border border-slate-700 p-3 rounded-xl shadow-xl z-50">
-          <h4 className="text-sm font-bold text-white mb-1">{data.name}</h4>
-          <p className="text-xs text-slate-300 mb-2">{data.role}</p>
-          <div className="w-full h-px bg-slate-700 mb-2"></div>
+        <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 sm:bottom-auto sm:top-0 sm:left-full sm:translate-x-0 sm:ml-4 sm:-translate-y-0 w-44 sm:w-48 bg-slate-800/95 backdrop-blur-md border border-slate-700 p-3 rounded-xl shadow-xl z-50 pointer-events-none">
+          <h4 className="text-sm font-bold text-white mb-1 truncate">{data.name}</h4>
+          <p className="text-xs text-slate-300 mb-2 truncate">{data.role}</p>
+          <div className="w-full h-px bg-slate-700 mb-2" />
           <p className="text-xs text-slate-400 mb-1"><span className="text-slate-300 font-medium">Project:</span> {data.project || 'Unassigned'}</p>
-          <p className="text-xs text-slate-400 leading-relaxed">{data.bio || 'No bio provided.'}</p>
+          <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">{data.bio || 'No bio provided.'}</p>
         </div>
       )}
 

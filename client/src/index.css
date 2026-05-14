@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy-900: #041424;
+  --color-navy-800: #0b1b2b;
+  --color-navy-700: #112131;
+  
+  --color-slate-800: #1c2b3c;
+  --color-slate-700: #273647;
+  
+  --color-accent-500: #1B98E0;
+  --color-accent-400: #8ecdff;
+
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+body {
+  background-color: var(--color-navy-900);
+  color: var(--color-slate-200, #e2e8f0);
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* React Flow customizations for Dark Theme */
+.react-flow__pane {
+  background-color: transparent !important;
+}
+.react-flow__controls-button {
+  background-color: var(--color-slate-800) !important;
+  border-color: var(--color-slate-700) !important;
+  color: var(--color-slate-300, #cbd5e1) !important;
+}
+.react-flow__controls-button:hover {
+  background-color: var(--color-slate-700) !important;
+}
+.react-flow__controls-button svg {
+  fill: currentColor !important;
+}
+.react-flow__background {
+  background-color: var(--color-navy-900);
+}

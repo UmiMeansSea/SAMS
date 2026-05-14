@@ -19,7 +19,7 @@ export default function DeletableEdge({
   style = {},
   markerEnd,
 }) {
-  const { setEdges } = useReactFlow();
+  const { setEdges, screenToFlowPosition } = useReactFlow();
   const [isHovered, setIsHovered] = useState(false);
   const [snappedPos, setSnappedPos] = useState({ x: 0, y: 0 });
   
@@ -47,11 +47,13 @@ export default function DeletableEdge({
   };
 
   const onMouseMove = (e) => {
-    const container = e.currentTarget.ownerSVGElement.getBoundingClientRect();
-    const px = e.clientX - container.left;
-    const py = e.clientY - container.top;
+    // Convert screen coordinates to Flow coordinates (handles zoom/pan)
+    const { x, y } = screenToFlowPosition({
+      x: e.clientX,
+      y: e.clientY,
+    });
     
-    const snapped = getClosestPointOnLine(px, py, sourceX, sourceY, targetX, targetY);
+    const snapped = getClosestPointOnLine(x, y, sourceX, sourceY, targetX, targetY);
     setSnappedPos(snapped);
   };
 
@@ -75,7 +77,7 @@ export default function DeletableEdge({
         d={edgePath}
         fill="none"
         stroke="transparent"
-        strokeWidth={30} // Large hit area for easy selection
+        strokeWidth={35} // Slightly larger hit area
         onMouseEnter={() => setIsHovered(true)}
         onMouseMove={onMouseMove}
         onMouseLeave={() => setIsHovered(false)}
@@ -91,7 +93,7 @@ export default function DeletableEdge({
           ...style, 
           strokeWidth: isHovered ? 4 : 2, 
           stroke: isHovered ? '#ff4d4d' : (style.stroke || '#3b82f6'),
-          strokeDasharray: '6,4', // Dotted/Dashed appearance
+          strokeDasharray: '6,4',
           transition: 'stroke 0.2s ease, stroke-width 0.2s ease'
         }} 
       />
@@ -100,7 +102,7 @@ export default function DeletableEdge({
         <div
           style={{
             position: 'absolute',
-            // Snaps exactly to the line segment
+            // Uses flow coordinates for placement
             transform: `translate(-50%, -50%) translate(${isHovered ? snappedPos.x : labelX}px,${isHovered ? snappedPos.y : labelY}px)`,
             pointerEvents: isHovered ? 'all' : 'none',
             zIndex: 1000,
@@ -111,11 +113,11 @@ export default function DeletableEdge({
         >
           {isHovered && (
             <button
-              className="flex items-center justify-center w-7 h-7 bg-red-500 border-2 border-white rounded-full text-white shadow-2xl animate-in zoom-in duration-150 hover:scale-110 active:scale-95 transition-transform"
+              className="flex items-center justify-center w-8 h-8 bg-red-500 border-2 border-white rounded-full text-white shadow-2xl animate-in zoom-in duration-150 hover:scale-110 active:scale-95 transition-transform"
               onClick={onEdgeDelete}
               title="Delete Connection"
             >
-              <X size={16} strokeWidth={3} />
+              <X size={18} strokeWidth={3} />
             </button>
           )}
         </div>

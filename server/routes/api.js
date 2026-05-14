@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const Person = require('../models/Person');
+const Project = require('../models/Project');
 
 // Configure Multer Storage
 const storage = multer.diskStorage({
@@ -74,6 +75,52 @@ router.delete('/people/:id', async (req, res) => {
     const person = await Person.findByIdAndDelete(req.params.id);
     if (!person) return res.status(404).json({ message: 'Person not found' });
     res.json({ message: 'Person deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PROJECTS API
+// Get all projects
+router.get('/projects', async (req, res) => {
+  try {
+    const projects = await Project.find().sort({ lastSaved: -1 });
+    res.json(projects);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Create a project
+router.post('/projects', async (req, res) => {
+  const project = new Project(req.body);
+  try {
+    const newProject = await project.save();
+    res.status(201).json(newProject);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Save/Update project (manually trigger lastSaved update)
+router.put('/projects/:id/save', async (req, res) => {
+  try {
+    const project = await Project.findByIdAndUpdate(
+      req.params.id, 
+      { lastSaved: new Date() }, 
+      { new: true }
+    );
+    res.json(project);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Get people for a specific project
+router.get('/projects/:id/people', async (req, res) => {
+  try {
+    const people = await Person.find({ projectId: req.params.id });
+    res.json(people);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

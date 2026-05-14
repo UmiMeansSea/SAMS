@@ -8,6 +8,9 @@ const PersonSchema = new mongoose.Schema({
   project: { type: String, default: '' },
   pfpUrl: { type: String, default: '' },
   category: { type: String, enum: ['Manager', 'Senior Developer', 'Intern', 'Other'], default: 'Other' },
+  // Multi-project support
+  projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },
+  isOnCanvas: { type: Boolean, default: false },
   // For the DAG/spanning tree, a person can report to multiple managers
   managers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Person' }],
   // Visual positions on the canvas (optional, could be calculated)

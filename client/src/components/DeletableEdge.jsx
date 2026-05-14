@@ -19,43 +19,15 @@ export default function DeletableEdge({
   style = {},
   markerEnd,
 }) {
-  const { setEdges, screenToFlowPosition } = useReactFlow();
+  const { setEdges } = useReactFlow();
   const [isHovered, setIsHovered] = useState(false);
-  const [snappedPos, setSnappedPos] = useState({ x: 0, y: 0 });
   
-  const [edgePath, labelX, labelY] = getStraightPath({
+  const [edgePath] = getStraightPath({
     sourceX,
     sourceY,
     targetX,
     targetY,
   });
-
-  // Math to snap a point to the closest point on the straight line segment
-  const getClosestPointOnLine = (px, py, x1, y1, x2, y2) => {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    if (dx === 0 && dy === 0) return { x: x1, y: y1 };
-    
-    // Projection of point P onto line AB: t = (AP . AB) / |AB|^2
-    const t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
-    const clampedT = Math.max(0, Math.min(1, t));
-    
-    return {
-      x: x1 + clampedT * dx,
-      y: y1 + clampedT * dy,
-    };
-  };
-
-  const onMouseMove = (e) => {
-    // Convert screen coordinates to Flow coordinates (handles zoom/pan)
-    const { x, y } = screenToFlowPosition({
-      x: e.clientX,
-      y: e.clientY,
-    });
-    
-    const snapped = getClosestPointOnLine(x, y, sourceX, sourceY, targetX, targetY);
-    setSnappedPos(snapped);
-  };
 
   const onEdgeDelete = async (e) => {
     if (e) e.stopPropagation();
@@ -72,20 +44,19 @@ export default function DeletableEdge({
 
   return (
     <>
-      {/* Interaction Path (Thick & Transparent for large hit area/leeway) */}
+      {/* Interaction Path (Thick & Transparent for 50px hit area) */}
       <path
         d={edgePath}
         fill="none"
         stroke="transparent"
-        strokeWidth={50} // Increased leeway for easier selection
+        strokeWidth={50}
         onMouseEnter={() => setIsHovered(true)}
-        onMouseMove={onMouseMove}
         onMouseLeave={() => setIsHovered(false)}
         onClick={onEdgeDelete}
         style={{ cursor: 'pointer' }}
       />
       
-      {/* Visual Path (Dotted Blue Line) */}
+      {/* Visual Path (Dotted Blue/Red Line) */}
       <BaseEdge 
         path={edgePath} 
         markerEnd={markerEnd} 
@@ -97,33 +68,6 @@ export default function DeletableEdge({
           transition: 'stroke 0.2s ease, stroke-width 0.2s ease'
         }} 
       />
-
-      <EdgeLabelRenderer>
-        <div
-          style={{
-            position: 'absolute',
-            // Snapped position with smooth glide transition
-            transform: `translate(-50%, -50%) translate(${isHovered ? snappedPos.x : labelX}px,${isHovered ? snappedPos.y : labelY}px)`,
-            pointerEvents: isHovered ? 'all' : 'none',
-            zIndex: 1000,
-            // Smoothens the movement as you trace the line
-            transition: 'transform 0.1s ease-out', 
-          }}
-          className="nodrag nopan"
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-        >
-          {isHovered && (
-            <button
-              className="flex items-center justify-center w-8 h-8 bg-red-500 border-2 border-white rounded-full text-white shadow-2xl animate-in zoom-in duration-200 hover:scale-110 active:scale-95 transition-transform"
-              onClick={onEdgeDelete}
-              title="Delete Connection"
-            >
-              <X size={18} strokeWidth={3} />
-            </button>
-          )}
-        </div>
-      </EdgeLabelRenderer>
     </>
   );
 }

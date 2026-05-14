@@ -16,6 +16,10 @@ import DeletableEdge from './components/DeletableEdge';
 import LeftSidebar from './components/LeftSidebar';
 import RightSidebar from './components/RightSidebar';
 
+import { createContext, useContext } from 'react';
+
+export const HoverContext = createContext(null);
+
 const nodeTypes = {
   person: PersonNode,
 };
@@ -27,6 +31,7 @@ const edgeTypes = {
 const API_URL = 'http://localhost:5005/api';
 
 function Flow() {
+  const { screenToFlowPosition, fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [rawPeople, setRawPeople] = useState([]); // Store raw data for Sidebars
@@ -92,6 +97,52 @@ function Flow() {
   );
 
   const [magnetTarget, setMagnetTarget] = useState(null);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState(null);
+
+  // Math for predictive hover (Point-to-Line-Segment distance)
+  const getDistanceToEdge = (px, py, x1, y1, x2, y2) => {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    if (dx === 0 && dy === 0) return Math.sqrt((px - x1) ** 2 + (py - y1) ** 2);
+    const t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
+    const clampedT = Math.max(0, Math.min(1, t));
+    const closestX = x1 + clampedT * dx;
+    const closestY = y1 + clampedT * dy;
+    return Math.sqrt((px - closestX) ** 2 + (py - closestY) ** 2);
+  };
+
+  const onPointerMove = useCallback((event) => {
+    const { x, y } = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    
+    let closestId = null;
+    let minDistance = 15; // Threshold in flow units (approx 7-15px depending on zoom)
+
+    // Optimization: create a lookup map for nodes
+    const nodeMap = new Map(nodes.map(n => [n.id, n.position]));
+
+    edges.forEach((edge) => {
+      const srcPos = nodeMap.get(edge.source);
+      const tarPos = nodeMap.get(edge.target);
+
+      if (srcPos && tarPos) {
+        // Using center of nodes (PersonNode is 120x80 approx)
+        const x1 = srcPos.x + 60;
+        const y1 = srcPos.y + 40;
+        const x2 = tarPos.x + 60;
+        const y2 = tarPos.y + 40;
+
+        const dist = getDistanceToEdge(x, y, x1, y1, x2, y2);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestId = edge.id;
+        }
+      }
+    });
+
+    if (closestId !== hoveredEdgeId) {
+      setHoveredEdgeId(closestId);
+    }
+  }, [nodes, edges, screenToFlowPosition, hoveredEdgeId]);
 
   // Auto-Magnet logic during drag
   const onNodeDrag = useCallback(
@@ -201,8 +252,6 @@ function Flow() {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
   }, []);
-
-  const { screenToFlowPosition, fitView } = useReactFlow();
 
   const autoAlign = useCallback(async () => {
     if (rawPeople.length === 0) return;
@@ -329,44 +378,46 @@ function Flow() {
   return (
     <div className="w-screen h-screen flex bg-navy-900 overflow-hidden font-sans">
       <LeftSidebar people={rawPeople} refreshData={fetchData} />
-      <div className="flex-1 h-full relative">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeDrag={onNodeDrag}
-          onNodeDragStop={onNodeDragStop}
-          onDragOver={onDragOver}
-          onDrop={onDrop}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          fitView
-          className="bg-navy-900"
-          defaultEdgeOptions={{ 
-            type: 'deletable',
-            style: { stroke: '#1B98E0', strokeWidth: 3 },
-            animated: true
-          }}
-        >
-          <Background color="#1c2b3c" gap={24} size={2} />
-          <Controls className="!bg-slate-800 !border-slate-700 !text-slate-300" />
-        </ReactFlow>
-        {/* Title and Controls overlay */}
-        <div className="absolute top-4 left-4 z-10 flex items-center gap-4">
-          <h1 className="text-xl font-bold text-white px-4 py-2 drop-shadow-xl font-sans tracking-wide">
-            OrgMap Workspace
-          </h1>
-          <button 
-            onClick={autoAlign}
-            className="flex items-center gap-2 bg-accent-600 hover:bg-accent-500 text-white px-4 py-2 rounded-full shadow-lg transition-all text-sm font-semibold border border-accent-400/30"
+      <HoverContext.Provider value={hoveredEdgeId}>
+        <div className="flex-1 h-full relative" onPointerMove={onPointerMove}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeDrag={onNodeDrag}
+            onNodeDragStop={onNodeDragStop}
+            onDragOver={onDragOver}
+            onDrop={onDrop}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            fitView
+            className="bg-navy-900"
+            defaultEdgeOptions={{ 
+              type: 'deletable',
+              style: { stroke: '#1B98E0', strokeWidth: 3 },
+              animated: true
+            }}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
-            Auto Align Tree
-          </button>
+            <Background color="#1c2b3c" gap={24} size={2} />
+            <Controls className="!bg-slate-800 !border-slate-700 !text-slate-300" />
+          </ReactFlow>
+          {/* Title and Controls overlay */}
+          <div className="absolute top-4 left-4 z-10 flex items-center gap-4">
+            <h1 className="text-xl font-bold text-white px-4 py-2 drop-shadow-xl font-sans tracking-wide">
+              OrgMap Workspace
+            </h1>
+            <button 
+              onClick={autoAlign}
+              className="flex items-center gap-2 bg-accent-600 hover:bg-accent-500 text-white px-4 py-2 rounded-full shadow-lg transition-all text-sm font-semibold border border-accent-400/30"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
+              Auto Align Tree
+            </button>
+          </div>
         </div>
-      </div>
+      </HoverContext.Provider>
       <RightSidebar people={rawPeople} />
     </div>
   );

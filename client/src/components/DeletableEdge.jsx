@@ -72,12 +72,12 @@ export default function DeletableEdge({
 
   return (
     <>
-      {/* Interaction Path (Thick & Transparent for 20px hit area) */}
+      {/* Interaction Path (Thick & Transparent for large hit area/leeway) */}
       <path
         d={edgePath}
         fill="none"
         stroke="transparent"
-        strokeWidth={35} // Slightly larger hit area
+        strokeWidth={50} // Increased leeway for easier selection
         onMouseEnter={() => setIsHovered(true)}
         onMouseMove={onMouseMove}
         onMouseLeave={() => setIsHovered(false)}
@@ -102,10 +102,12 @@ export default function DeletableEdge({
         <div
           style={{
             position: 'absolute',
-            // Uses flow coordinates for placement
+            // Snapped position with smooth glide transition
             transform: `translate(-50%, -50%) translate(${isHovered ? snappedPos.x : labelX}px,${isHovered ? snappedPos.y : labelY}px)`,
             pointerEvents: isHovered ? 'all' : 'none',
             zIndex: 1000,
+            // Smoothens the movement as you trace the line
+            transition: 'transform 0.1s ease-out', 
           }}
           className="nodrag nopan"
           onMouseEnter={() => setIsHovered(true)}
@@ -113,7 +115,7 @@ export default function DeletableEdge({
         >
           {isHovered && (
             <button
-              className="flex items-center justify-center w-8 h-8 bg-red-500 border-2 border-white rounded-full text-white shadow-2xl animate-in zoom-in duration-150 hover:scale-110 active:scale-95 transition-transform"
+              className="flex items-center justify-center w-8 h-8 bg-red-500 border-2 border-white rounded-full text-white shadow-2xl animate-in zoom-in duration-200 hover:scale-110 active:scale-95 transition-transform"
               onClick={onEdgeDelete}
               title="Delete Connection"
             >

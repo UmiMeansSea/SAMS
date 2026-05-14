@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import {
   BaseEdge,
-  EdgeLabelRenderer,
   getStraightPath,
   useReactFlow,
+  useStore,
 } from '@xyflow/react';
-import { X, Trash2 } from 'lucide-react';
 import axios from 'axios';
 
 export default function DeletableEdge({
@@ -21,6 +20,9 @@ export default function DeletableEdge({
 }) {
   const { setEdges } = useReactFlow();
   const [isHovered, setIsHovered] = useState(false);
+  
+  // Get current zoom level to keep the interaction area consistent on screen
+  const zoom = useStore((s) => s.transform[2]);
   
   const [edgePath] = getStraightPath({
     sourceX,
@@ -42,14 +44,18 @@ export default function DeletableEdge({
     }
   };
 
+  // Calculate uniform hit area (e.g. 40 pixels on screen regardless of zoom)
+  const interactionWidth = 40 / zoom;
+
   return (
     <>
-      {/* Interaction Path (Thick & Transparent for 50px hit area) */}
+      {/* Interaction Path (Thick & Transparent) */}
       <path
         d={edgePath}
         fill="none"
         stroke="transparent"
-        strokeWidth={50}
+        strokeWidth={interactionWidth}
+        strokeLinecap="round" // Ensures uniform distance even at the ends
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onClick={onEdgeDelete}

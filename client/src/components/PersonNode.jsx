@@ -97,7 +97,9 @@ export default function PersonNode({ data }) {
           <h4 className="text-sm font-bold text-white mb-1 truncate">{data.name}</h4>
           <p className="text-xs text-slate-300 mb-2 truncate">{data.role}</p>
           <div className="w-full h-px bg-slate-700 mb-2" />
-          <p className="text-xs text-slate-400 mb-1"><span className="text-slate-300 font-medium">Project:</span> {data.project || 'Unassigned'}</p>
+          <p className="text-xs text-slate-400 mb-1">
+            <span className="text-slate-300 font-medium">Projects:</span> {data.projectNames || 'Unassigned'}
+          </p>
           <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">{data.bio || 'No bio provided.'}</p>
         </div>
       )}

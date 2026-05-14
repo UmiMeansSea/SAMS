@@ -5,32 +5,40 @@ const path = require('path');
 const Person = require('../models/Person');
 const Project = require('../models/Project');
 
-// Configure Multer Storage
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'orgmap-pfps',
+    allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
+    transformation: [{ width: 500, height: 500, crop: 'limit' }]
   },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
 });
 
 const upload = multer({ storage: storage });
 
-// Upload PFP
+// Upload PFP to Cloudinary
 router.post('/upload', upload.single('pfp'), (req, res) => {
   if (!req.file) {
-    return res.status(400).send('No file uploaded.');
+    return res.status(400).json({ message: 'No file uploaded.' });
   }
-  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-  res.json({ url: fileUrl });
+  // Cloudinary returns the secure_url in req.file.path
+  res.json({ url: req.file.path });
 });
 
 // Get all people
 router.get('/people', async (req, res) => {
   try {
-    const people = await Person.find();
+    const people = await Person.find().populate('projectIds', 'name');
     res.json(people);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -39,7 +47,11 @@ router.get('/people', async (req, res) => {
 
 // Create a person
 router.post('/people', async (req, res) => {
-  const person = new Person(req.body);
+  const personData = { ...req.body };
+  if (personData.projectId && !personData.projectIds) {
+    personData.projectIds = [personData.projectId];
+  }
+  const person = new Person(personData);
   try {
     const newPerson = await person.save();
     res.status(201).json(newPerson);
@@ -61,7 +73,24 @@ router.post('/people/batch', async (req, res) => {
 // Update a person (e.g. changing managers or position)
 router.patch('/people/:id', async (req, res) => {
   try {
-    const person = await Person.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const updateData = { ...req.body };
+    
+    // If projectId is provided, add it to projectIds as well
+    if (updateData.projectId) {
+      await Person.findByIdAndUpdate(req.params.id, { 
+        $addToSet: { projectIds: updateData.projectId } 
+      });
+    }
+
+    // Support removing from projects
+    if (updateData.removeProjectId) {
+      await Person.findByIdAndUpdate(req.params.id, { 
+        $pull: { projectIds: updateData.removeProjectId } 
+      });
+      delete updateData.removeProjectId;
+    }
+
+    const person = await Person.findByIdAndUpdate(req.params.id, updateData, { new: true });
     if (!person) return res.status(404).json({ message: 'Person not found' });
     res.json(person);
   } catch (err) {
@@ -135,8 +164,61 @@ router.put('/projects/:id/save', async (req, res) => {
 // Get people for a specific project
 router.get('/projects/:id/people', async (req, res) => {
   try {
-    const people = await Person.find({ projectId: req.params.id });
+    const people = await Person.find({ 
+      $or: [
+        { projectId: req.params.id },
+        { projectIds: req.params.id }
+      ]
+    }).populate('projectIds', 'name');
     res.json(people);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Delete a project and its people
+router.delete('/projects/:id', async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    const project = await Project.findByIdAndDelete(projectId);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+
+    // Delete all people associated with this project
+    const deleteResult = await Person.deleteMany({ projectId: projectId });
+    
+    res.json({ message: 'Project and associated people deleted', deletedPeopleCount: deleteResult.deletedCount });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Cleanup API - Clear all projects except the default one
+router.post('/cleanup-projects', async (req, res) => {
+  try {
+    let defaultProject = await Project.findOne({ name: 'Default Project' });
+    if (!defaultProject) {
+      defaultProject = await Project.findOne().sort({ createdAt: 1 });
+    }
+    if (!defaultProject) {
+      defaultProject = new Project({ name: 'Default Project' });
+      await defaultProject.save();
+    }
+
+    // Delete all other projects
+    await Project.deleteMany({ _id: { $ne: defaultProject._id } });
+
+    // Delete people not in the default project
+    await Person.deleteMany({ 
+      projectId: { $exists: true, $ne: defaultProject._id, $ne: null } 
+    });
+
+    // Assign legacy people to default project
+    await Person.updateMany(
+      { projectId: { $exists: false } },
+      { $set: { projectId: defaultProject._id } }
+    );
+
+    res.json({ message: 'Cleanup successful', keptProject: defaultProject });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

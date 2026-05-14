@@ -114,7 +114,10 @@ export default function UserProfileCard({ mode: initialMode = 'view', person, on
         email: person.email || '',
         bio: person.bio || '',
         category: person.category || 'Other',
-        projectsWorkingOn: person.projectsWorkingOn || [],
+        projectsWorkingOn: [
+          ...(person.projectsWorkingOn || []),
+          ...(person.projectIds?.map(p => p.name || 'Unnamed Project') || [])
+        ].filter((v, i, a) => a && v && a.indexOf(v) === i),
       });
       setPfpUrl(person.pfpUrl || '');
     } else {
@@ -344,15 +347,21 @@ export default function UserProfileCard({ mode: initialMode = 'view', person, on
             </label>
             {isReadonly ? (
               <div className="flex flex-wrap gap-1.5 pt-0.5">
-                {(person?.projectsWorkingOn?.length > 0) ? (
-                  person.projectsWorkingOn.map(p => (
-                    <span key={p} className="bg-accent-500/15 text-accent-300 text-xs font-medium px-2.5 py-1 rounded-full border border-accent-500/20">
-                      {p}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-xs text-slate-600 italic">No projects assigned.</span>
-                )}
+                {(() => {
+                  const mergedProjects = [
+                    ...(person?.projectsWorkingOn || []),
+                    ...(person?.projectIds?.map(p => p.name || 'Unnamed Project') || [])
+                  ].filter((v, i, a) => v && a.indexOf(v) === i);
+
+                  if (mergedProjects.length > 0) {
+                    return mergedProjects.map(p => (
+                      <span key={p} className="bg-accent-500/15 text-accent-300 text-xs font-medium px-2.5 py-1 rounded-full border border-accent-500/20">
+                        {p}
+                      </span>
+                    ));
+                  }
+                  return <span className="text-xs text-slate-600 italic">No projects assigned.</span>;
+                })()}
               </div>
             ) : (
               <TagInput value={form.projectsWorkingOn} onChange={v => set('projectsWorkingOn', v)} />
@@ -386,6 +395,30 @@ export default function UserProfileCard({ mode: initialMode = 'view', person, on
                 ) : (
                   <><Save size={15} /> Save Changes</>
                 )}
+              </button>
+            </div>
+          )}
+
+          {isView && !isCreate && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (window.confirm(`Are you sure you want to PERMANENTLY delete ${person.name} from the database?`)) {
+                    try {
+                      await axios.delete(`${API_URL}/people/${person._id || person.id}`);
+                      onRefresh?.();
+                      window.dispatchEvent(new CustomEvent('refreshData'));
+                      onClose?.();
+                    } catch (err) {
+                      console.error('Delete failed:', err);
+                      alert('Failed to delete person');
+                    }
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-all text-xs font-semibold border border-red-500/20"
+              >
+                <Trash2 size={13} /> Delete Person Permanently
               </button>
             </div>
           )}

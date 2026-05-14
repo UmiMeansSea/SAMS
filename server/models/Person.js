@@ -14,6 +14,7 @@ const PersonSchema = new mongoose.Schema({
   },
   // Multi-project support
   projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },
+  projectIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Project' }],
   isOnCanvas: { type: Boolean, default: false },
   // For the DAG/spanning tree, a person can report to multiple managers
   managers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Person' }],

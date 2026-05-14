@@ -61,6 +61,7 @@ function Flow() {
         ? allPeople.filter(p =>
             p.projectId === activeProjectId ||
             p.projectId === String(activeProjectId) ||
+            (p.projectIds && p.projectIds.some(pid => (pid._id || pid) === activeProjectId || pid === String(activeProjectId))) ||
             (!p.projectId && (p.project === 'OrgMap' || (p.position && (p.position.x !== 0 || p.position.y !== 0))))
           )
         : allPeople; // No project selected → show everyone
@@ -69,7 +70,14 @@ function Flow() {
         id: p._id,
         type: 'person',
         position: p.position || { x: Math.random() * 600, y: Math.random() * 400 },
-        data: { id: p._id, name: p.name, role: p.role, project: p.project, pfpUrl: p.pfpUrl, bio: p.bio },
+        data: { 
+          id: p._id, 
+          name: p.name, 
+          role: p.role, 
+          projectNames: p.projectIds?.map(pid => pid.name).filter(Boolean).join(', '), 
+          pfpUrl: p.pfpUrl, 
+          bio: p.bio 
+        },
       }));
 
       const fetchedEdges = [];
@@ -514,7 +522,16 @@ function Flow() {
           </div>
         </div>
       </HoverContext.Provider>
-      <RightSidebar people={rawPeople} />
+      <RightSidebar 
+        people={rawPeople.filter(p => 
+          !currentProject?._id || 
+          p.projectId === currentProject._id || 
+          p.projectId === String(currentProject._id) ||
+          (p.projectIds && p.projectIds.some(pid => (pid._id || pid) === currentProject._id || pid === String(currentProject._id))) ||
+          (!p.projectId && (p.project === 'OrgMap' || (p.position && (p.position.x !== 0 || p.position.y !== 0))))
+        )} 
+        currentProject={currentProject}
+      />
     </div>
   );
 }

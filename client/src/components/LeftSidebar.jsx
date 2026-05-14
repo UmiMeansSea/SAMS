@@ -188,7 +188,11 @@ const LeftSidebar = ({
     if (!window.confirm(`Remove ${personName} from this project? They stay in the database.`)) return;
     try {
       await axios.patch(`${API_URL}/people/${personId}`, {
-        projectId: null, project: '', managers: [], position: { x: 0, y: 0 }
+        projectId: null, 
+        project: '', 
+        removeProjectId: currentProject?._id,
+        managers: [], 
+        position: { x: 0, y: 0 }
       });
       refreshData();
     } catch (err) {
@@ -296,6 +300,20 @@ const LeftSidebar = ({
                 : saveStatus === 'saving' ? <Loader2 size={17} className="text-slate-400 animate-spin" />
                 : <Save size={17} className="text-slate-400 hover:text-white" />}
             </button>
+            <button onClick={async () => {
+              if (!currentProject) return;
+              if (window.confirm(`Delete project "${currentProject.name}"? This will permanently remove all personnel in this project.`)) {
+                try {
+                  await axios.delete(`${API_URL}/projects/${currentProject._id}`);
+                  window.location.reload(); // Hard refresh to reset app state and fetch new project
+                } catch (err) {
+                  console.error('Delete failed:', err);
+                  alert('Failed to delete project');
+                }
+              }
+            }} className="p-1.5 hover:bg-red-500/10 text-slate-500 hover:text-red-400 rounded-lg transition-all" title="Delete Current Project">
+              <Trash2 size={17} />
+            </button>
             <button onClick={() => setIsNewProjectModalOpen(true)} className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-all" title="New Project">
               <FolderPlus size={17} />
             </button>
@@ -372,7 +390,10 @@ const LeftSidebar = ({
                       className="group flex items-center gap-2.5 p-2 bg-slate-800/50 border border-slate-700/50 rounded-lg cursor-pointer hover:border-accent-500/50 hover:bg-slate-800 transition-all"
                     >
                       <GripVertical size={13} className="text-slate-600 group-hover:text-slate-400 flex-shrink-0 cursor-grab" />
-                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-accent-600 to-indigo-600 flex items-center justify-center overflow-hidden flex-shrink-0 text-xs font-bold text-white">
+                      <div 
+                        className="w-7 h-7 rounded-full bg-gradient-to-br from-accent-600 to-indigo-600 flex items-center justify-center overflow-hidden flex-shrink-0 text-xs font-bold text-white"
+                        title={`Working on: ${person.projectIds?.map(p => p.name).filter(Boolean).join(', ') || 'Unassigned'}`}
+                      >
                         {person.pfpUrl
                           ? <img src={person.pfpUrl} alt={person.name} className="w-full h-full object-cover" />
                           : person.name.charAt(0).toUpperCase()}

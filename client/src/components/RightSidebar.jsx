@@ -6,7 +6,7 @@ import UserProfileCard from './UserProfileCard';
 const API_URL = 'http://localhost:5005/api';
 
 // Recursive component for hierarchy nodes
-const HierarchyNode = ({ person, allPeople, depth = 0, visited = new Set(), onOpenProfile }) => {
+const HierarchyNode = ({ person, allPeople, depth = 0, visited = new Set(), onOpenProfile, currentProject }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isOver, setIsOver] = useState(false);
 
@@ -82,11 +82,13 @@ const HierarchyNode = ({ person, allPeople, depth = 0, visited = new Set(), onOp
 
   const handleRemoveFromProject = async (e) => {
     e.stopPropagation();
-    if (!window.confirm(`Remove ${person.name} from project? (Record stays in database)`)) return;
+    if (!window.confirm(`Remove ${person.name} from project? (Person will be unassigned but remains in database)`)) return;
     
     try {
       await axios.patch(`${API_URL}/people/${personId}`, {
         project: '',
+        projectId: null,
+        removeProjectId: currentProject?._id,
         managers: [],
         position: { x: 0, y: 0 }
       });
@@ -113,7 +115,10 @@ const HierarchyNode = ({ person, allPeople, depth = 0, visited = new Set(), onOp
         <div className="w-4 h-4 flex items-center justify-center text-slate-400">
           {hasReports ? (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : <span className="w-1 h-1 rounded-full bg-slate-600"></span>}
         </div>
-        <div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+        <div 
+          className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center overflow-hidden flex-shrink-0"
+          title={`Working on: ${person.projectIds?.map(p => p.name).filter(Boolean).join(', ') || 'Unassigned'}`}
+        >
           {person.pfpUrl ? <img src={person.pfpUrl} alt={person.name} className="w-full h-full object-cover" /> : <span className="text-[10px] font-bold text-slate-300">{person.name.charAt(0)}</span>}
         </div>
         {/* Clickable name — opens profile card */}
@@ -143,6 +148,7 @@ const HierarchyNode = ({ person, allPeople, depth = 0, visited = new Set(), onOp
               depth={depth + 1}
               visited={newVisited}
               onOpenProfile={onOpenProfile}
+              currentProject={currentProject}
             />
           ))}
         </div>
@@ -151,7 +157,7 @@ const HierarchyNode = ({ person, allPeople, depth = 0, visited = new Set(), onOp
   );
 };
 
-export default function RightSidebar({ people }) {
+export default function RightSidebar({ people, currentProject }) {
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
@@ -272,6 +278,7 @@ export default function RightSidebar({ people }) {
                 person={root}
                 allPeople={people}
                 onOpenProfile={setSelectedPerson}
+                currentProject={currentProject}
               />
             ))
           )}

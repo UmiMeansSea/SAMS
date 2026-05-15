@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import {
   ReactFlow,
@@ -119,6 +119,7 @@ function Flow() {
       setEdges(fetchedEdges);
     } catch (err) {
       console.error('Error fetching people:', err);
+      alert('Failed to load personnel data. Please check your connection.');
     }
   }, [currentProject, setNodes, setEdges]);
 
@@ -168,7 +169,7 @@ function Flow() {
     fetchData();
     window.addEventListener('refreshData', fetchData);
     return () => window.removeEventListener('refreshData', fetchData);
-  }, [currentProject]); // eslint-disable-line
+  }, [fetchData]); // properly cleanup old listeners when fetchData reference changes
 
   // Connect manually (e.g. dragging edge from handle to handle)
   const onConnect = useCallback(
@@ -218,7 +219,14 @@ function Flow() {
     return Math.sqrt((px - closestX) ** 2 + (py - closestY) ** 2);
   };
 
+  // Optimization: Reference for throttling
+  const lastPointerMove = useRef(0);
+
   const onPointerMove = useCallback((event) => {
+    const now = Date.now();
+    if (now - lastPointerMove.current < 50) return; // Throttle to ~20fps to prevent frame drops
+    lastPointerMove.current = now;
+
     const { x, y } = screenToFlowPosition({ x: event.clientX, y: event.clientY });
     
     let closestId = null;
@@ -386,9 +394,13 @@ function Flow() {
 
     const newPositions = {};
     let currentX = 0;
+    const visited = new Set(); // Prevent UI freeze from cyclic reporting structures
 
     // 2. Recursive function to position tree
     const positionNode = (nodeId, depth, xOffset) => {
+      if (visited.has(nodeId)) return 0;
+      visited.add(nodeId);
+
       const node = peopleById[nodeId];
       if (!node || newPositions[nodeId]) return 0;
 
@@ -405,10 +417,16 @@ function Flow() {
           childX = xOffset + width;
         });
         
-        // Parent is centered above children
-        const firstChildX = newPositions[children[0]].x;
-        const lastChildX = newPositions[children[children.length - 1]].x;
-        newPositions[nodeId] = { x: (firstChildX + lastChildX) / 2, y: depth * VERTICAL_GAP };
+        // Parent is centered above children safely
+        const childPositions = children.map(c => newPositions[c]).filter(Boolean);
+        if (childPositions.length > 0) {
+          const firstChildX = childPositions[0].x;
+          const lastChildX = childPositions[childPositions.length - 1].x;
+          newPositions[nodeId] = { x: (firstChildX + lastChildX) / 2, y: depth * VERTICAL_GAP };
+        } else {
+          newPositions[nodeId] = { x: xOffset, y: depth * VERTICAL_GAP };
+          width = HORIZONTAL_GAP;
+        }
       }
       return width;
     };

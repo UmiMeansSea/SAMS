@@ -7,8 +7,16 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5005;
 
+const allowedOrigins = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : ['http://localhost:5173'];
+
 app.use(cors({
-  origin: '*',
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -16,6 +24,9 @@ app.use(cors({
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+if (!process.env.MONGODB_URI) {
+  console.warn('WARNING: MONGODB_URI is not defined. Falling back to localhost. Do not use this in production!');
+}
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/orgmap')
   .then(() => console.log('MongoDB Connected'))
   .catch(err => console.error('MongoDB connection error:', err));

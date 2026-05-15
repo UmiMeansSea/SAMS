@@ -24,7 +24,24 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit to prevent large file uploads (DoS risk)
+});
+
+// Basic auth middleware (Placeholders for real implementation)
+const requireAuth = (req, res, next) => {
+  // In a real app, verify JWT here.
+  next();
+};
+
+const requireAdmin = (req, res, next) => {
+  // Prevent unauthorized destructive actions
+  if (process.env.NODE_ENV === 'production' && req.headers['x-admin-key'] !== process.env.ADMIN_KEY) {
+    return res.status(403).json({ message: 'Forbidden: Admin access required' });
+  }
+  next();
+};
 
 // Upload PFP to Cloudinary
 router.post('/upload', upload.single('pfp'), (req, res) => {
@@ -61,7 +78,7 @@ router.post('/people', async (req, res) => {
 });
 
 // Batch create people
-router.post('/people/batch', async (req, res) => {
+router.post('/people/batch', requireAdmin, async (req, res) => {
   try {
     const newPeople = await Person.insertMany(req.body);
     res.status(201).json(newPeople);
@@ -71,23 +88,29 @@ router.post('/people/batch', async (req, res) => {
 });
 
 // Update a person (e.g. changing managers or position)
-router.patch('/people/:id', async (req, res) => {
+router.patch('/people/:id', requireAuth, async (req, res) => {
   try {
-    const updateData = { ...req.body };
+    // Prevent NoSQL Injection: Pick only allowed fields
+    const allowedFields = ['name', 'title', 'department', 'email', 'phone', 'bio', 'position', 'pfp', 'tags'];
+    const updateData = {};
+    for (const key of allowedFields) {
+      if (req.body[key] !== undefined) updateData[key] = req.body[key];
+    }
+    
+    const { projectId, removeProjectId } = req.body;
     
     // If projectId is provided, add it to projectIds as well
-    if (updateData.projectId) {
+    if (projectId) {
       await Person.findByIdAndUpdate(req.params.id, { 
-        $addToSet: { projectIds: updateData.projectId } 
+        $addToSet: { projectIds: projectId } 
       });
     }
 
     // Support removing from projects
-    if (updateData.removeProjectId) {
+    if (removeProjectId) {
       await Person.findByIdAndUpdate(req.params.id, { 
-        $pull: { projectIds: updateData.removeProjectId } 
+        $pull: { projectIds: removeProjectId } 
       });
-      delete updateData.removeProjectId;
     }
 
     const person = await Person.findByIdAndUpdate(req.params.id, updateData, { new: true });
@@ -99,11 +122,18 @@ router.patch('/people/:id', async (req, res) => {
 });
 
 // Full profile update (PUT)
-router.put('/people/:id', async (req, res) => {
+router.put('/people/:id', requireAuth, async (req, res) => {
   try {
+    // Prevent NoSQL Injection: Pick only allowed fields
+    const allowedFields = ['name', 'title', 'department', 'email', 'phone', 'bio', 'position', 'pfp', 'tags', 'projectIds'];
+    const updateData = {};
+    for (const key of allowedFields) {
+      if (req.body[key] !== undefined) updateData[key] = req.body[key];
+    }
+
     const person = await Person.findByIdAndUpdate(
       req.params.id,
-      { $set: req.body },
+      { $set: updateData },
       { new: true }
     );
     if (!person) return res.status(404).json({ message: 'Person not found' });
@@ -148,11 +178,18 @@ router.post('/projects', async (req, res) => {
 });
 
 // Update project details
-router.patch('/projects/:id', async (req, res) => {
+router.patch('/projects/:id', requireAuth, async (req, res) => {
   try {
+    // Prevent NoSQL Injection
+    const allowedFields = ['name', 'description'];
+    const updateData = {};
+    for (const key of allowedFields) {
+      if (req.body[key] !== undefined) updateData[key] = req.body[key];
+    }
+
     const project = await Project.findByIdAndUpdate(
       req.params.id,
-      { $set: req.body },
+      { $set: updateData },
       { new: true }
     );
     if (!project) return res.status(404).json({ message: 'Project not found' });
@@ -191,24 +228,27 @@ router.get('/projects/:id/people', async (req, res) => {
   }
 });
 
-// Delete a project and its people
-router.delete('/projects/:id', async (req, res) => {
+// Delete a project and update its people
+router.delete('/projects/:id', requireAuth, async (req, res) => {
   try {
     const projectId = req.params.id;
     const project = await Project.findByIdAndDelete(projectId);
     if (!project) return res.status(404).json({ message: 'Project not found' });
 
-    // Delete all people associated with this project
-    const deleteResult = await Person.deleteMany({ projectId: projectId });
+    // Safely remove the project ID from people's projectIds array instead of deleting the people
+    const updateResult = await Person.updateMany(
+      { projectIds: projectId },
+      { $pull: { projectIds: projectId } }
+    );
     
-    res.json({ message: 'Project and associated people deleted', deletedPeopleCount: deleteResult.deletedCount });
+    res.json({ message: 'Project deleted and people references updated', modifiedCount: updateResult.modifiedCount });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
 // Cleanup API - Clear all projects except the default one
-router.post('/cleanup-projects', async (req, res) => {
+router.post('/cleanup-projects', requireAdmin, async (req, res) => {
   try {
     let defaultProject = await Project.findOne({ name: 'Default Project' });
     if (!defaultProject) {

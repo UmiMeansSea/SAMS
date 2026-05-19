@@ -90,36 +90,67 @@ router.post('/people/batch', requireAdmin, async (req, res) => {
 // Update a person (e.g. changing managers or position)
 router.patch('/people/:id', requireAuth, async (req, res) => {
   try {
-    // Prevent NoSQL Injection: Pick only allowed fields
-    const allowedFields = ['name', 'title', 'department', 'email', 'phone', 'bio', 'position', 'pfp', 'tags'];
+    const { id } = req.params;
+    console.log(`PATCH /people/${id} - Payload:`, JSON.stringify(req.body, null, 2));
+
+    const allowedFields = [
+      'name', 'role', 'title', 'department', 'email', 'phone', 'bio', 
+      'position', 'pfp', 'pfpUrl', 'tags', 'category', 'managers', 
+      'project', 'projectsWorkingOn', 'projectId', 'projectIds', 'isOnCanvas'
+    ];
+
     const updateData = {};
+    
+    // Use $set for standard field updates to avoid conflicts with other operators
+    const setFields = {};
     for (const key of allowedFields) {
-      if (req.body[key] !== undefined) updateData[key] = req.body[key];
+      if (req.body[key] !== undefined) setFields[key] = req.body[key];
+    }
+    
+    if (Object.keys(setFields).length > 0) {
+      updateData.$set = setFields;
+    }
+    
+    // Handle MongoDB operators for managers (used for connections)
+    if (req.body.$addToSet) {
+      updateData.$addToSet = req.body.$addToSet;
+    }
+    if (req.body.$pull) {
+      updateData.$pull = req.body.$pull;
     }
     
     const { projectId, removeProjectId } = req.body;
     
-    // If projectId is provided, add it to projectIds as well
+    // Handle Project associations
     if (projectId) {
-      await Person.findByIdAndUpdate(req.params.id, { 
-        $addToSet: { projectIds: projectId } 
+      await Person.findByIdAndUpdate(id, { 
+        $addToSet: { projectIds: projectId },
+        $set: { projectId: projectId } // Also set primary projectId
       });
     }
 
-    // Support removing from projects
     if (removeProjectId) {
-      await Person.findByIdAndUpdate(req.params.id, { 
+      await Person.findByIdAndUpdate(id, { 
         $pull: { projectIds: removeProjectId } 
       });
     }
 
-    const person = await Person.findByIdAndUpdate(req.params.id, updateData, { new: true });
-    if (!person) return res.status(404).json({ message: 'Person not found' });
+    console.log(`Applying update to ${id}:`, JSON.stringify(updateData, null, 2));
+    const person = await Person.findByIdAndUpdate(id, updateData, { new: true });
+    
+    if (!person) {
+      console.error(`Person ${id} not found`);
+      return res.status(404).json({ message: 'Person not found' });
+    }
+
     res.json(person);
   } catch (err) {
+    console.error(`Error patching person ${req.params.id}:`, err);
     res.status(400).json({ message: err.message });
   }
 });
+
+
 
 // Full profile update (PUT)
 router.put('/people/:id', requireAuth, async (req, res) => {

@@ -332,7 +332,7 @@ const LeftSidebar = ({
                     >
                       <GripVertical size={13} className="text-slate-600 group-hover:text-slate-400 flex-shrink-0 cursor-grab" />
                       <div 
-                        className="w-7 h-7 rounded-full bg-gradient-to-br from-accent-600 to-indigo-600 flex items-center justify-center overflow-hidden flex-shrink-0 text-xs font-bold text-white"
+                        className="w-7 h-7 rounded-full bg-gradient-to-br from-accent-600 to-indigo-600 flex items-center justify-center overflow-hidden flex-shrink-0 text-xs font-bold text-pure-white"
                         title={`Working on: ${person.projectIds?.map(p => p.name).filter(Boolean).join(', ') || 'Unassigned'}`}
                       >
                         {person.pfpUrl
@@ -364,7 +364,7 @@ const LeftSidebar = ({
       <div className="p-4 border-t border-slate-800 bg-slate-900 space-y-2.5">
         <button
           onClick={() => setProfileCard({ mode: 'create', person: null })}
-          className="w-full flex items-center justify-center gap-2 bg-accent-600 hover:bg-accent-500 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-accent-900/20"
+          className="w-full flex items-center justify-center gap-2 bg-accent-600 hover:bg-accent-500 text-pure-white py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-accent-900/20"
         >
           <UserPlus size={15} /> Add Person
         </button>

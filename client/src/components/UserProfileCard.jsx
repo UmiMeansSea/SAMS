@@ -40,7 +40,7 @@ function Avatar({ name, pfpUrl, size = 'lg' }) {
       {pfpUrl ? (
         <img src={pfpUrl} alt={name} className="w-full h-full object-cover" />
       ) : (
-        <div className={`w-full h-full bg-gradient-to-br ${color} flex items-center justify-center font-bold text-white`}>
+        <div className={`w-full h-full bg-gradient-to-br ${color} flex items-center justify-center font-bold text-pure-white`}>
           {initials}
         </div>
       )}
@@ -195,13 +195,13 @@ export default function UserProfileCard({ mode: initialMode = 'view', person, on
           />
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 p-1.5 bg-black/20 hover:bg-black/40 text-white rounded-lg transition-colors"
+            className="absolute top-3 right-3 p-1.5 bg-black/20 hover:bg-black/40 text-pure-white rounded-lg transition-colors"
           >
             <X size={16} />
           </button>
           {/* Mode label */}
           <div className="absolute top-3 left-4">
-            <span className="text-xs font-bold text-white/70 uppercase tracking-widest">
+            <span className="text-xs font-bold text-pure-white/70 uppercase tracking-widest">
               {isCreate ? 'New Member' : isEdit ? 'Editing Profile' : 'Profile'}
             </span>
           </div>
@@ -216,7 +216,7 @@ export default function UserProfileCard({ mode: initialMode = 'view', person, on
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingPfp}
-                className="absolute -bottom-1 -right-1 p-1.5 bg-accent-600 hover:bg-accent-500 text-white rounded-full shadow-lg transition-colors"
+                className="absolute -bottom-1 -right-1 p-1.5 bg-accent-600 hover:bg-accent-500 text-pure-white rounded-full shadow-lg transition-colors"
               >
                 {uploadingPfp ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
               </button>
@@ -226,7 +226,7 @@ export default function UserProfileCard({ mode: initialMode = 'view', person, on
           <div className="pb-2 flex-1 min-w-0">
             {isView ? (
               <>
-                <h2 className="text-lg font-bold text-white truncate leading-tight">{person?.name}</h2>
+                <h2 className="text-lg font-bold text-pure-white truncate leading-tight">{person?.name}</h2>
                 <p className="text-sm text-accent-400 font-medium truncate">{person?.role}</p>
               </>
             ) : (
@@ -240,7 +240,7 @@ export default function UserProfileCard({ mode: initialMode = 'view', person, on
             {isView && (
               <button
                 onClick={() => setMode('edit')}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-600 hover:bg-accent-500 text-white rounded-lg text-xs font-semibold transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-600 hover:bg-accent-500 text-pure-white rounded-lg text-xs font-semibold transition-colors"
               >
                 <Edit3 size={13} /> Edit
               </button>
@@ -384,7 +384,7 @@ export default function UserProfileCard({ mode: initialMode = 'view', person, on
               <button
                 type="submit"
                 disabled={isSubmitting || saved}
-                className="flex-[2] flex items-center justify-center gap-2 bg-accent-600 hover:bg-accent-500 disabled:bg-slate-700 text-white py-2.5 rounded-xl text-sm font-bold shadow-lg transition-all"
+                className="flex-[2] flex items-center justify-center gap-2 bg-accent-600 hover:bg-accent-500 disabled:bg-slate-700 text-pure-white py-2.5 rounded-xl text-sm font-bold shadow-lg transition-all"
               >
                 {saved ? (
                   <><CheckCircle2 size={15} className="text-green-400" /> Saved!</>

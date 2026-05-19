@@ -152,7 +152,7 @@ export default function AddPersonModal({ isOpen, onClose, onRefresh, projectId }
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-[2] bg-accent-500 hover:bg-accent-400 disabled:bg-slate-600 disabled:cursor-not-allowed text-white py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-accent-500/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2"
+              className="flex-[2] bg-accent-500 hover:bg-accent-400 disabled:bg-slate-600 disabled:cursor-not-allowed text-pure-white py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-accent-500/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2"
             >
               {isSubmitting ? (
                 <>

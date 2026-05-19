@@ -1,18 +1,82 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  --color-navy-900: #041424;
-  --color-navy-800: #0b1b2b;
-  --color-navy-700: #112131;
+  --color-navy-900: var(--bg-navy-900);
+  --color-navy-800: var(--bg-navy-800);
+  --color-navy-700: var(--bg-navy-700);
   
-  --color-slate-800: #1c2b3c;
-  --color-slate-700: #273647;
-  
-  --color-accent-500: #1B98E0;
-  --color-accent-400: #8ecdff;
+  --color-slate-950: var(--bg-slate-950);
+  --color-slate-900: var(--bg-slate-900);
+  --color-slate-800: var(--bg-slate-800);
+  --color-slate-700: var(--bg-slate-700);
+  --color-slate-600: var(--bg-slate-600);
+  --color-slate-500: var(--text-slate-500);
+  --color-slate-400: var(--text-slate-400);
+  --color-slate-300: var(--text-slate-300);
+  --color-slate-200: var(--text-slate-200);
+
+  --color-white: var(--text-white);
+  --color-pure-white: #ffffff;
+
+  --color-accent-600: var(--accent-600);
+  --color-accent-500: var(--accent-500);
+  --color-accent-400: var(--accent-400);
+  --color-accent-300: var(--accent-300);
 
   --font-sans: "Inter", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
+}
+
+:root {
+  /* LIGHT MODE (good contrast) */
+  --bg-navy-900: #f8fafc;
+  --bg-navy-800: #f1f5f9;
+  --bg-navy-700: #e2e8f0;
+  
+  --bg-slate-950: #ffffff;
+  --bg-slate-900: #f1f5f9;
+  --bg-slate-800: #ffffff;
+  --bg-slate-700: #cbd5e1;
+  --bg-slate-600: #e2e8f0;
+
+  --text-slate-500: #64748b;
+  --text-slate-400: #475569;
+  --text-slate-300: #334155;
+  --text-slate-200: #0f172a;
+
+  --text-white: #0f172a;
+
+  --accent-600: #0284c7;
+  --accent-500: #0ea5e9;
+  --accent-400: #38bdf8;
+  --accent-300: #7dd3fc;
+}
+
+.dark {
+  /* DARK MODE (original colors) */
+  --bg-navy-900: #041424;
+  --bg-navy-800: #0b1b2b;
+  --bg-navy-700: #112131;
+  
+  --bg-slate-950: #020617;
+  --bg-slate-900: #0f172a;
+  --bg-slate-800: #1c2b3c;
+  --bg-slate-700: #273647;
+  --bg-slate-600: #475569;
+
+  --text-slate-500: #64748b;
+  --text-slate-400: #94a3b8;
+  --text-slate-300: #cbd5e1;
+  --text-slate-200: #e2e8f0;
+
+  --text-white: #ffffff;
+
+  --accent-600: #0284c7;
+  --accent-500: #1B98E0;
+  --accent-400: #8ecdff;
+  --accent-300: #bae6fd;
 }
 
 body {

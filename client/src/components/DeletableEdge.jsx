@@ -11,8 +11,6 @@ const API_URL = 'http://localhost:5005/api';
 
 export default function DeletableEdge({
   id,
-  source,
-  target,
   sourceX,
   sourceY,
   targetX,
@@ -20,16 +18,10 @@ export default function DeletableEdge({
   style = {},
   markerEnd,
 }) {
-  const { setEdges } = useReactFlow();
   const hoveredEdgeId = useContext(HoverContext);
   const isHovered = hoveredEdgeId === id;
   
   const [edgePath] = getStraightPath({
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    // Add default values for stability
     sourceX: sourceX || 0,
     sourceY: sourceY || 0,
     targetX: targetX || 0,
@@ -38,16 +30,6 @@ export default function DeletableEdge({
 
   return (
     <>
-      {/* Invisible interaction path (hit area) */}
-      <path
-        id={id + '-hit'}
-        d={edgePath}
-        fill="none"
-        stroke="transparent"
-        strokeWidth={50}
-        className="react-flow__edge-interaction"
-        style={{ cursor: 'pointer', pointerEvents: 'all' }}
-      />
       {/* Visual Path (Dotted Blue/Red Line) */}
       <BaseEdge 
         id={id}
@@ -59,9 +41,19 @@ export default function DeletableEdge({
           stroke: isHovered ? '#ff4d4d' : (style.stroke || '#3b82f6'),
           strokeDasharray: '6,4',
           transition: 'stroke 0.3s ease, stroke-width 0.3s ease',
-          pointerEvents: 'none' // Clicks go through to the hit area above
         }} 
+      />
+      {/* Invisible interaction path (hit area) - Rendered last to be on top */}
+      <path
+        id={id + '-hit'}
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={25}
+        className="react-flow__edge-interaction"
+        style={{ cursor: 'pointer', pointerEvents: 'all' }}
       />
     </>
   );
 }
+

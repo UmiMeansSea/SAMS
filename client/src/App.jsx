@@ -17,6 +17,7 @@ import ProjectModal from './components/ProjectModal';
 import DeletableEdge from './components/DeletableEdge';
 import LeftSidebar from './components/LeftSidebar';
 import RightSidebar from './components/RightSidebar';
+import SettingsToggle from './components/SettingsToggle';
 
 import { createContext, useContext } from 'react';
 
@@ -177,9 +178,11 @@ function Flow() {
       setEdges((eds) => addEdge({ ...params, type: 'deletable', style: { stroke: '#1B98E0', strokeWidth: 2 } }, eds));
       try {
         await axios.patch(`${API_URL}/people/${params.target}`, {
-          $addToSet: { managers: params.source }
+          $addToSet: { managers: params.source },
+          projectId: currentProject?._id
         });
         fetchData(); // Sync sidebars
+
       } catch (err) {
         console.error('Error saving connection:', err);
       }
@@ -193,9 +196,8 @@ function Flow() {
   const onEdgeClick = useCallback(async (event, edge) => {
     if (edge.type !== 'deletable') return;
     
-    // Check if it's the "hovered" one to match the red highlight visual feedback
-    if (edge.id !== hoveredEdgeId) return;
-
+    // We removed the strict hoveredEdgeId check to make it more responsive, 
+    // since onEdgeClick already guarantees an edge was clicked.
     try {
       setEdges((eds) => eds.filter((e) => e.id !== edge.id));
       await axios.patch(`${API_URL}/people/${edge.target}`, {
@@ -205,7 +207,38 @@ function Flow() {
     } catch (err) {
       console.error('Error deleting edge:', err);
     }
-  }, [setEdges, fetchData, hoveredEdgeId]);
+  }, [setEdges, fetchData]);
+
+  const onEdgesDelete = useCallback(async (deletedEdges) => {
+    for (const edge of deletedEdges) {
+      if (edge.type === 'deletable') {
+        try {
+          await axios.patch(`${API_URL}/people/${edge.target}`, {
+            $pull: { managers: edge.source }
+          });
+        } catch (err) {
+          console.error('Error deleting edge via key:', err);
+        }
+      }
+    }
+    fetchData();
+  }, [fetchData]);
+
+  const onNodesDelete = useCallback(async (deletedNodes) => {
+    if (!window.confirm(`Are you sure you want to delete ${deletedNodes.length} personnel? This will permanently remove them from the database.`)) {
+      fetchData(); // Reset nodes
+      return;
+    }
+    
+    for (const node of deletedNodes) {
+      try {
+        await axios.delete(`${API_URL}/people/${node.id}`);
+      } catch (err) {
+        console.error('Error deleting person:', err);
+      }
+    }
+    fetchData();
+  }, [fetchData]);
 
   // Math for predictive hover (Point-to-Line-Segment distance)
   const getDistanceToEdge = (px, py, x1, y1, x2, y2) => {
@@ -350,10 +383,14 @@ function Flow() {
       }
 
       try {
-        const updatePayload = { position: { x: newX, y: newY } };
+        const updatePayload = { 
+          position: { x: newX, y: newY },
+          projectId: currentProject?._id // Ensure it stays/joins the current project context
+        };
         if (newManagerId) {
           updatePayload.$addToSet = { managers: newManagerId };
         }
+
         await axios.patch(`${API_URL}/people/${node.id}`, updatePayload);
         fetchData(); // Sync sidebars
       } catch (err) {
@@ -518,12 +555,16 @@ function Flow() {
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            onNodesDelete={onNodesDelete}
             onConnect={onConnect}
+
             onEdgeClick={onEdgeClick}
+            onEdgesDelete={onEdgesDelete}
             onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
             onDragOver={onDragOver}
             onDrop={onDrop}
+
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
@@ -556,6 +597,9 @@ function Flow() {
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
               <span className="hidden xs:inline sm:inline">Auto Align</span>
             </button>
+            <div className="pointer-events-auto">
+              <SettingsToggle />
+            </div>
           </div>
         </div>
       </HoverContext.Provider>

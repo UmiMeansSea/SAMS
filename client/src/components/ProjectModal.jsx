@@ -85,7 +85,7 @@ export default function ProjectModal({ isOpen, onClose, onSubmit, mode = 'create
               Cancel
             </button>
             <button type="submit" disabled={isSubmitting || !name.trim()}
-              className="flex-[2] bg-accent-500 hover:bg-accent-400 disabled:bg-slate-600 disabled:cursor-not-allowed text-white py-2.5 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2">
+              className="flex-[2] bg-accent-500 hover:bg-accent-400 disabled:bg-slate-600 disabled:cursor-not-allowed text-pure-white py-2.5 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2">
               {isSubmitting ? (
                 <><Loader2 className="animate-spin" size={16} /> {mode === 'create' ? 'Creating...' : 'Saving...'}</>
               ) : (

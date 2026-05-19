@@ -65,11 +65,11 @@ export default function PersonNode({ data }) {
         {(isHovered || isUploading) && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center transition-opacity">
             {isUploading ? (
-              <Loader2 className="animate-spin text-white" size={20} />
+              <Loader2 className="animate-spin text-pure-white" size={20} />
             ) : (
               <button 
                 onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-                className="p-1.5 rounded-full bg-accent-500 hover:bg-accent-400 text-white transition-colors shadow-md"
+                className="p-1.5 rounded-full bg-accent-500 hover:bg-accent-400 text-pure-white transition-colors shadow-md"
               >
                 <Edit2 size={16} />
               </button>

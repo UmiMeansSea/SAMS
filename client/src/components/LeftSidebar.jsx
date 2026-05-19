@@ -8,6 +8,8 @@ import * as XLSX from 'xlsx';
 import axios from 'axios';
 import ProjectModal from './ProjectModal';
 
+const API_URL = 'http://localhost:5005/api';
+
 // ─── Main Sidebar ─────────────────────────────────────────────────────────────
 const LeftSidebar = ({
   people,
@@ -144,20 +146,29 @@ const LeftSidebar = ({
         const wb = XLSX.read(evt.target.result, { type: 'binary' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const data = XLSX.utils.sheet_to_json(ws);
-        const formatted = data.map((item, i) => ({
-          name: item.name || 'Unknown', role: item.role || 'Employee',
-          email: item.email || '', category: item.category || 'Other',
-          bio: item.bio || '', projectId: currentProject?._id || null,
-          position: { x: i * 120, y: 300 }
+        
+        const formatted = data.map((item) => ({
+          name: item.name ? String(item.name).trim() : 'Unknown',
+          role: item.role ? String(item.role).trim() : 'Employee',
+          email: item.email ? String(item.email).trim().toLowerCase() : '',
+          category: item.category ? String(item.category).trim() : 'Other',
+          bio: item.bio ? String(item.bio).trim() : '',
+          project: item.project ? String(item.project).trim() : '',
         }));
-        await axios.post(`${API_URL}/people/batch`, formatted);
-        alert(`Imported ${formatted.length} people!`);
-        refreshData();
+
+        await axios.post(`${API_URL}/people/batch-upsert`, formatted);
+        alert(`Successfully imported ${formatted.length} people!`);
+        
+        if (typeof refreshData === 'function') refreshData();
+        window.dispatchEvent(new CustomEvent('refreshData')); // Force refresh in App.jsx
       } catch (err) {
-        console.error(err);
-        alert('Import failed.');
+        console.error('Import error:', err);
+        alert('Import failed. Please check the file format and try again.');
       } finally {
         setIsImporting(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''; // Reset input so same file can be uploaded again
+        }
       }
     };
     reader.readAsBinaryString(file);

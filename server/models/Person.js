@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const PersonSchema = new mongoose.Schema({
   name: { type: String, required: true },
   role: { type: String, required: true },
-  email: { type: String },
+  email: { type: String, unique: true, sparse: true, trim: true, lowercase: true },
   bio: { type: String, default: '' },
   projectsWorkingOn: [{ type: String }],
   project: { type: String, default: '' },

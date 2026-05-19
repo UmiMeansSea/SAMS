@@ -87,6 +87,84 @@ router.post('/people/batch', requireAdmin, async (req, res) => {
   }
 });
 
+// Batch upsert people (Excel Import)
+router.post('/people/batch-upsert', requireAuth, async (req, res) => {
+  try {
+    const peopleData = req.body;
+    if (!Array.isArray(peopleData)) {
+      return res.status(400).json({ message: 'Payload must be an array' });
+    }
+
+    // Prepare default project fallback
+    let defaultProject = await Project.findOne({ name: 'Default Project' });
+    if (!defaultProject) {
+      defaultProject = new Project({ name: 'Default Project' });
+      await defaultProject.save();
+    }
+
+    const operations = [];
+
+    // Pre-fetch all projects to minimize DB calls
+    const existingProjects = await Project.find();
+    const projectMap = new Map();
+    existingProjects.forEach(p => projectMap.set(p.name.toLowerCase(), p));
+
+    for (const data of peopleData) {
+      // Find or assign project
+      let assignedProjectId = defaultProject._id;
+      let projectName = data.project ? data.project.trim() : '';
+
+      if (projectName) {
+        const lowerName = projectName.toLowerCase();
+        if (projectMap.has(lowerName)) {
+          assignedProjectId = projectMap.get(lowerName)._id;
+        } else {
+          // Create new project
+          const newProject = new Project({ name: projectName });
+          await newProject.save();
+          projectMap.set(lowerName, newProject);
+          assignedProjectId = newProject._id;
+        }
+      }
+
+      // Build update document
+      const updateData = {
+        name: data.name,
+        role: data.role || 'Member',
+        email: data.email,
+        bio: data.bio || '',
+        category: data.category || 'Other',
+        projectId: assignedProjectId,
+      };
+
+      // Upsert using email as unique identifier
+      // If email isn't provided, we can't reliably upsert, so we might insert or use name as fallback
+      const query = data.email ? { email: data.email } : { name: data.name };
+
+      operations.push({
+        updateOne: {
+          filter: query,
+          update: { 
+            $set: updateData,
+            $addToSet: { projectIds: assignedProjectId }
+          },
+          upsert: true
+        }
+      });
+    }
+
+    if (operations.length > 0) {
+      const result = await Person.bulkWrite(operations);
+      res.status(200).json({ message: 'Batch upsert successful', result });
+    } else {
+      res.status(200).json({ message: 'No data to process' });
+    }
+  } catch (err) {
+    console.error('Batch upsert error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Update a person (e.g. changing managers or position)
 router.patch('/people/:id', requireAuth, async (req, res) => {
   try {
